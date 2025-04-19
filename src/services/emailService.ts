@@ -8,17 +8,35 @@ interface EmailData {
   body: string;
   recipient?: string;
   originalEmailId?: string;
+  attachments?: Record<string, File>;
+  contentIdMap?: Record<string, string>;
 }
 
 // Define the webhook payload type based on Mailgun's format
-interface MailgunWebhookPayload {
+export interface MailgunWebhookPayload {
   sender: string;
   recipient: string;
+  recipients?: string[];
   subject: string;
   "body-plain"?: string;
   "body-html"?: string;
+  "stripped-text"?: string;
+  "stripped-html"?: string;
+  "stripped-signature"?: string;
   "Message-Id"?: string;
-  [key: string]: string | undefined;
+  from?: string;
+  to?: string;
+  attachments?: Record<string, File>;
+  attachmentCount?: string;
+  contentIdMap?: Record<string, string>;
+  messageHeaders?: unknown[];
+  mailgunVariables?: Record<string, string>;
+  [key: string]:
+    | string
+    | string[]
+    | Record<string, unknown>
+    | unknown[]
+    | undefined;
 }
 
 export class EmailService {
@@ -70,7 +88,8 @@ export class EmailService {
       throw new Error("No recipient provided for email reply");
     }
 
-    const data = {
+    // Create data object that conforms to mailgun's SendData type
+    const data: mailgun.messages.SendData = {
       from: process.env.EMAIL_SENDER || "The Mind <the-mind@agent-hyve.com>",
       to: recipient,
       subject: `Re: ${subject}`,
@@ -78,6 +97,10 @@ export class EmailService {
       "h:In-Reply-To": emailData.originalEmailId,
       "h:References": emailData.originalEmailId,
     };
+
+    // Note about attachments: To handle attachments in replies,
+    // you would need to convert the File objects to Mailgun's attachment format
+    // This would require reading the file data and setting up proper attachment objects
 
     return new Promise((resolve, reject) => {
       this.mailgunClient.messages().send(data, (error, body) => {
@@ -98,11 +121,17 @@ export class EmailService {
   ): Promise<void> {
     // Extract email data from Mailgun webhook payload
     const emailData: EmailData = {
-      from: mailgunData.sender,
+      from: mailgunData.from || mailgunData.sender || "",
       subject: mailgunData.subject,
-      body: mailgunData["body-plain"] || mailgunData["body-html"] || "",
+      body:
+        mailgunData["stripped-text"] ||
+        mailgunData["body-plain"] ||
+        mailgunData["body-html"] ||
+        "",
       recipient: mailgunData.sender, // Reply to sender
       originalEmailId: mailgunData["Message-Id"],
+      attachments: mailgunData.attachments,
+      contentIdMap: mailgunData.contentIdMap,
     };
 
     try {
