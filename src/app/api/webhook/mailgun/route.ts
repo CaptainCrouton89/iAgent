@@ -1,23 +1,59 @@
 import { EmailService, MailgunWebhookPayload } from "@/services/emailService";
+import crypto from "crypto";
 import { NextResponse } from "next/server";
 
 // Initialize the email service
 const emailService = new EmailService();
 
+interface MailgunSignature {
+  timestamp: string;
+  token: string;
+  signature: string;
+}
+
+function verifyMailgunSignature(
+  signatureData: MailgunSignature,
+  apiKey: string
+): boolean {
+  const hmac = crypto.createHmac("sha256", apiKey);
+  hmac.update(signatureData.timestamp + signatureData.token);
+  const digest = hmac.digest("hex");
+  return digest === signatureData.signature;
+}
+
 export async function POST(req: Request) {
   try {
-    // Verify this is a valid Mailgun webhook request
-    // In production, you should validate the webhook signature using Mailgun's signing key
-    const signature = req.headers.get("X-Mailgun-Signature");
-    const token = req.headers.get("X-Mailgun-Token");
-    const timestamp = req.headers.get("X-Mailgun-Timestamp");
-
-    console.log("signature", signature, token, timestamp);
-    // Do verification here...
-
     // Parse the form data from Mailgun
     const formData = await req.formData();
     console.log("formData", formData);
+
+    // Extract signature verification components from the request
+    const timestamp = formData.get("timestamp") as string;
+    const token = formData.get("token") as string;
+    const signature = formData.get("signature") as string;
+
+    // Get your Mailgun API key from environment variable
+    const MAILGUN_API_KEY = process.env.MAILGUN_API_KEY || "";
+
+    // Verify the Mailgun signature
+    if (!timestamp || !token || !signature) {
+      return NextResponse.json(
+        { message: "Missing signature verification data" },
+        { status: 401 }
+      );
+    }
+
+    const isValid = verifyMailgunSignature(
+      { timestamp, token, signature },
+      MAILGUN_API_KEY
+    );
+
+    if (!isValid) {
+      return NextResponse.json(
+        { message: "Invalid signature" },
+        { status: 401 }
+      );
+    }
 
     // Convert FormData to a regular object, handling both string values and files
     const mailgunData: MailgunWebhookPayload = {
