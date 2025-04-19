@@ -32,7 +32,7 @@ async function sendTestEmail(): Promise<void> {
   const domain = process.env.MAILGUN_DOMAIN || "";
 
   // Use a properly formatted sender email
-  const senderEmail = "The Mind <the-mind@agent-hyve.com>";
+  const senderEmail = "Wendy French <wendy@agent-hyve.com>";
 
   // Email configuration
   const recipientEmail = "test@example.com"; // Replace with your actual email for testing

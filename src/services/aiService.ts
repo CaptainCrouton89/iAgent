@@ -49,13 +49,14 @@ export class AIService {
           
           ${emailData.body}
           
-          Generate an engaging response. If the email mentions recent events, products, or information that you might not have up-to-date knowledge about, use the search tools to verify facts before replying.
+          Generate an engaging response. If the email mentions recent events, products, or information that you might not have up-to-date knowledge about, use the search tools to verify facts before replying. Your response should only include the response to the email, and nothing else.
         `,
         messages: emailData.history,
         tools: {
           search: this.perplexityClient.searchTool,
           searchWithDateRange: this.perplexityClient.searchWithDateRangeTool,
         },
+
         maxSteps: 5, // Allow multiple steps for tool usage
       });
 

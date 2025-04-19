@@ -54,7 +54,7 @@ export class EmailService {
     this.apiKey = process.env.MAILGUN_API_KEY || "";
     this.domain = process.env.MAILGUN_DOMAIN || "";
     this.sender =
-      process.env.EMAIL_SENDER || `The Mind <the-mind@${this.domain}>`;
+      process.env.EMAIL_SENDER || `Wendy French <wendy@${this.domain}>`;
 
     // Initialize AI service
     this.aiService = new AIService({
