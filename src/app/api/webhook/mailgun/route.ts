@@ -8,9 +8,11 @@ export async function POST(req: Request) {
   try {
     // Verify this is a valid Mailgun webhook request
     // In production, you should validate the webhook signature using Mailgun's signing key
-    // const signature = req.headers.get('X-Mailgun-Signature');
-    // const token = req.headers.get('X-Mailgun-Token');
-    // const timestamp = req.headers.get('X-Mailgun-Timestamp');
+    const signature = req.headers.get("X-Mailgun-Signature");
+    const token = req.headers.get("X-Mailgun-Token");
+    const timestamp = req.headers.get("X-Mailgun-Timestamp");
+
+    console.log("signature", signature, token, timestamp);
     // Do verification here...
 
     // Parse the form data from Mailgun
