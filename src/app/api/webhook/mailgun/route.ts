@@ -12,6 +12,8 @@ export async function POST(req: Request) {
     // Parse the form data from Mailgun
     const formData = await req.formData();
 
+    console.log("formData", formData);
+
     // Convert FormData to a regular object
     const mailgunData: Record<string, string> = {};
     for (const [key, value] of formData.entries()) {
