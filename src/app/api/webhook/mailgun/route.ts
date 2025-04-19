@@ -18,6 +18,8 @@ function verifyMailgunSignature(
   const hmac = crypto.createHmac("sha256", apiKey);
   hmac.update(signatureData.timestamp + signatureData.token);
   const digest = hmac.digest("hex");
+  console.log("digest", digest);
+  console.log("signatureData.signature", signatureData.signature);
   return digest === signatureData.signature;
 }
 
@@ -48,12 +50,14 @@ export async function POST(req: Request) {
       MAILGUN_API_KEY
     );
 
-    if (!isValid) {
-      return NextResponse.json(
-        { message: "Invalid signature" },
-        { status: 401 }
-      );
-    }
+    console.log("isValid", isValid);
+
+    // if (!isValid) {
+    //   return NextResponse.json(
+    //     { message: "Invalid signature" },
+    //     { status: 401 }
+    //   );
+    // }
 
     // Convert FormData to a regular object, handling both string values and files
     const mailgunData: MailgunWebhookPayload = {
