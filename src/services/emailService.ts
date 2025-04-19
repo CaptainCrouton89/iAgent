@@ -1,6 +1,7 @@
-import { openai } from "@ai-sdk/openai";
-import { generateText } from "ai";
 import mailgun from "mailgun-js";
+import { AIService } from "./aiService";
+import { ContactsService } from "./contactsService";
+import { SupabaseService } from "./supabaseService";
 
 interface EmailData {
   from: string;
@@ -44,6 +45,9 @@ export class EmailService {
   private apiKey: string;
   private domain: string;
   private sender: string;
+  private aiService: AIService;
+  private supabaseService: SupabaseService;
+  private contactsService: ContactsService;
 
   constructor() {
     // Get environment variables
@@ -52,6 +56,14 @@ export class EmailService {
     this.sender =
       process.env.EMAIL_SENDER || `The Mind <the-mind@${this.domain}>`;
 
+    // Initialize AI service
+    this.aiService = new AIService({
+      debug: process.env.NODE_ENV === "development",
+    });
+
+    // Initialize Supabase service
+    this.supabaseService = new SupabaseService();
+    this.contactsService = new ContactsService(this.supabaseService);
     // Validate configuration
     if (!this.apiKey) {
       throw new Error(
@@ -112,28 +124,34 @@ export class EmailService {
   }
 
   /**
+   * Extracts email address from a formatted email string
+   */
+  private extractEmailAddress(formattedEmail: string): string {
+    // Check if it's in "Name <email@domain.com>" format
+    const match = formattedEmail.match(/<([^>]+)>/);
+    if (match && match[1]) {
+      return match[1];
+    }
+
+    // Otherwise assume it's just an email address
+    return formattedEmail;
+  }
+
+  /**
    * Generates an AI-powered reply to an email
    */
   async writeReply(emailData: EmailData): Promise<string> {
     const { from, subject, body } = emailData;
 
-    // Generate AI response using the Vercel AI SDK
-    const result = await generateText({
-      model: openai("gpt-4.1-2025-04-14"),
-      system:
-        "You are a helpful assistant. Write a professional and concise email reply.",
-      prompt: `
-        I received this email:
-        From: ${from}
-        Subject: ${subject}
-        
-        ${body}
-        
-        Please write a reply that addresses the content of the email.
-      `,
+    // Use the AIService to generate a response
+    const result = await this.aiService.generateEmailResponse({
+      from,
+      subject,
+      body,
+      recipient: emailData.recipient,
     });
 
-    return result.text;
+    return result;
   }
 
   /**
@@ -208,6 +226,16 @@ export class EmailService {
     };
 
     try {
+      // Save sender to contacts database
+      if (emailData.from) {
+        const emailAddress = this.extractEmailAddress(emailData.from);
+        await this.contactsService.saveContact({
+          email: emailAddress,
+          name: emailData.from.replace(`<${emailAddress}>`, "").trim(),
+        });
+        console.log(`Saved contact: ${emailAddress}`);
+      }
+
       // Generate AI reply
       const replyContent = await this.writeReply(emailData);
 
