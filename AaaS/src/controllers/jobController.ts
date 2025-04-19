@@ -20,6 +20,8 @@ export const createJob = async (
 
   try {
     // Add job to queue
+    // This will be processed by the job queue processor in jobQueue.ts
+    // which will execute the tool with the matching toolName
     const job = await jobQueue.add({
       toolName,
       args: args || {},

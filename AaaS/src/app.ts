@@ -2,6 +2,8 @@ import express from "express";
 import { setupBullBoard } from "./middleware/bullBoard";
 import { errorHandler } from "./middleware/errorHandler";
 import apiRoutes from "./routes";
+// Import tools to ensure they're registered
+import "./async-tools";
 
 // Create Express application
 const app = express();

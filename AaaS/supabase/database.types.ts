@@ -9,6 +9,91 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      agent_message_history: {
+        Row: {
+          agent_id: string
+          content: string
+          created_at: string
+          id: string
+          metadata: Json | null
+          role: string
+          updated_at: string
+        }
+        Insert: {
+          agent_id: string
+          content: string
+          created_at?: string
+          id?: string
+          metadata?: Json | null
+          role: string
+          updated_at?: string
+        }
+        Update: {
+          agent_id?: string
+          content?: string
+          created_at?: string
+          id?: string
+          metadata?: Json | null
+          role?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_message_history_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agents: {
+        Row: {
+          agent_type: string
+          background: string | null
+          context_id: string | null
+          created_at: string | null
+          goal: string
+          id: string
+          is_active: boolean | null
+          logs: string | null
+          title: string
+          updated_at: string | null
+        }
+        Insert: {
+          agent_type: string
+          background?: string | null
+          context_id?: string | null
+          created_at?: string | null
+          goal: string
+          id?: string
+          is_active?: boolean | null
+          logs?: string | null
+          title: string
+          updated_at?: string | null
+        }
+        Update: {
+          agent_type?: string
+          background?: string | null
+          context_id?: string | null
+          created_at?: string | null
+          goal?: string
+          id?: string
+          is_active?: boolean | null
+          logs?: string | null
+          title?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agents_context_id_fkey"
+            columns: ["context_id"]
+            isOneToOne: false
+            referencedRelation: "contexts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contacts: {
         Row: {
           created_at: string | null
@@ -32,6 +117,69 @@ export type Database = {
           name?: string | null
         }
         Relationships: []
+      }
+      contexts: {
+        Row: {
+          created_at: string | null
+          id: string
+          text_data: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          text_data: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          text_data?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      programming_tasks: {
+        Row: {
+          context_id: string | null
+          created_at: string | null
+          description: string
+          id: string
+          task_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          context_id?: string | null
+          created_at?: string | null
+          description: string
+          id?: string
+          task_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          context_id?: string | null
+          created_at?: string | null
+          description?: string
+          id?: string
+          task_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "programming_tasks_context_id_fkey"
+            columns: ["context_id"]
+            isOneToOne: false
+            referencedRelation: "contexts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "programming_tasks_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       short_term_memory: {
         Row: {
@@ -62,6 +210,70 @@ export type Database = {
           source_id?: string | null
         }
         Relationships: []
+      }
+      tasks: {
+        Row: {
+          context_id: string | null
+          created_at: string | null
+          description: string
+          id: string
+          is_cursor: boolean | null
+          logs: string | null
+          owner_id: string | null
+          parent_id: string | null
+          status: string | null
+          title: string
+          updated_at: string | null
+        }
+        Insert: {
+          context_id?: string | null
+          created_at?: string | null
+          description: string
+          id?: string
+          is_cursor?: boolean | null
+          logs?: string | null
+          owner_id?: string | null
+          parent_id?: string | null
+          status?: string | null
+          title: string
+          updated_at?: string | null
+        }
+        Update: {
+          context_id?: string | null
+          created_at?: string | null
+          description?: string
+          id?: string
+          is_cursor?: boolean | null
+          logs?: string | null
+          owner_id?: string | null
+          parent_id?: string | null
+          status?: string | null
+          title?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tasks_context_id_fkey"
+            columns: ["context_id"]
+            isOneToOne: false
+            referencedRelation: "contexts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {

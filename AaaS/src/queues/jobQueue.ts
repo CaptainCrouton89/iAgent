@@ -1,5 +1,6 @@
 import axios from "axios";
 import Queue from "bull";
+import { executeTool } from "../async-tools/baseTool";
 
 // Interface for job data
 export interface JobData {
@@ -34,31 +35,73 @@ jobQueue.process(5, async (job) => {
     console.log(`Processing job ${job.id} for tool: ${toolName}`);
     console.log(`Tool arguments:`, args);
 
-    // Wait 10 seconds (simulating tool execution)
-    await new Promise((resolve) => setTimeout(resolve, 10000));
-
+    // Execute the tool
+    const toolResult = await executeTool(toolName, args);
     job.progress(100);
-    console.log(`Job ${job.id} completed`);
+
+    if (toolResult.success) {
+      console.log(`Tool '${toolName}' executed successfully`);
+    } else {
+      console.error(`Tool '${toolName}' execution failed:`, toolResult.error);
+    }
 
     // Ping the agent webhook with the result
     const webhookUrl = `${process.env.AGENT_URL}/${agentId}/webhook/${path}`;
-    const response = await axios.post(webhookUrl, {
-      success: true,
-      data: {
-        type: "text",
-        text: "Hello world",
-      },
-    });
 
-    console.log(
-      `Webhook notification sent to ${webhookUrl}, status: ${response.status}`
-    );
+    try {
+      const response = await axios.post(webhookUrl, {
+        success: toolResult.success,
+        data: toolResult.data,
+        error: toolResult.error,
+      });
 
-    return {
-      completed: true,
-      timestamp: new Date().toISOString(),
-      webhookStatus: response.status,
-    };
+      console.log(
+        `Webhook notification sent to ${webhookUrl}, status: ${response.status}`
+      );
+
+      return {
+        completed: true,
+        timestamp: new Date().toISOString(),
+        webhookStatus: response.status,
+      };
+    } catch (error) {
+      // Handle webhook errors more cleanly
+      if (axios.isAxiosError(error)) {
+        const statusCode = error.response?.status;
+        const errorMessage = error.response?.data?.message || error.message;
+
+        if (statusCode === 404) {
+          console.error(`Webhook endpoint not found: ${webhookUrl}`);
+        } else {
+          console.error(`Webhook error (${statusCode}): ${errorMessage}`);
+        }
+
+        return {
+          completed: true, // The tool execution was completed, even if webhook failed
+          timestamp: new Date().toISOString(),
+          webhookStatus: statusCode || 0,
+          webhookError: `Failed to send result: ${errorMessage}`,
+          toolSuccess: toolResult.success,
+          toolData: toolResult.data,
+        };
+      }
+
+      console.error(
+        `Webhook notification failed: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+      return {
+        completed: true,
+        timestamp: new Date().toISOString(),
+        webhookStatus: 0,
+        webhookError: `Unknown error: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+        toolSuccess: toolResult.success,
+        toolData: toolResult.data,
+      };
+    }
   } catch (error) {
     console.error(`Job ${job.id} failed:`, error);
     throw error;
