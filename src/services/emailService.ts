@@ -151,7 +151,25 @@ export class EmailService {
       recipient: emailData.recipient,
     });
 
-    return result;
+    // Log any web searches that were performed, if available
+    if (result.steps && result.steps.length > 0) {
+      console.log(
+        `AI performed ${result.steps.length} steps to generate the reply`
+      );
+
+      const toolCalls = result.steps
+        .flatMap((step) => step.toolCalls || [])
+        .filter(Boolean);
+
+      if (toolCalls.length > 0) {
+        console.log(`Web searches performed: ${toolCalls.length}`);
+        toolCalls.forEach((call, index) => {
+          console.log(`- Search ${index + 1}: ${JSON.stringify(call.args)}`);
+        });
+      }
+    }
+
+    return result.text;
   }
 
   /**
