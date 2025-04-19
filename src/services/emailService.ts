@@ -64,6 +64,10 @@ export class EmailService {
     // Initialize Supabase service
     this.supabaseService = new SupabaseService();
     this.contactsService = new ContactsService(this.supabaseService);
+
+    // Connect services together
+    this.aiService.setContactsService(this.contactsService);
+
     // Validate configuration
     if (!this.apiKey) {
       throw new Error(

@@ -1,4 +1,5 @@
 import { Database } from "../../supabase/database.types";
+import { AIService } from "./aiService";
 import { SupabaseService } from "./supabaseService";
 
 export interface Memory {
@@ -16,22 +17,47 @@ type DatabaseMemory = Database["public"]["Tables"]["short_term_memory"]["Row"];
 
 export class MemoryService {
   private supabaseService: SupabaseService;
+  private aiService?: AIService;
 
-  constructor(supabaseService: SupabaseService) {
+  constructor(supabaseService: SupabaseService, aiService?: AIService) {
     this.supabaseService = supabaseService;
+    this.aiService = aiService;
+  }
+
+  /**
+   * Set the AI service instance
+   */
+  setAIService(aiService: AIService): void {
+    this.aiService = aiService;
   }
 
   /**
    * Create a new memory entry
+   * Processes the raw memory text through AI to create a first-person summarized memory
    */
   async createMemory(memory: Memory): Promise<Memory> {
     try {
       const supabase = this.supabaseService.getClient();
 
+      // Process the memory content through AI if available
+      let processedContent = memory.content;
+      if (this.aiService) {
+        try {
+          processedContent = await this.aiService.processMemoryContent({
+            content: memory.content,
+            source: memory.source,
+          });
+          console.log("Memory processed through AI service");
+        } catch (error) {
+          console.error("Error processing memory through AI:", error);
+          // Continue with original content if processing fails
+        }
+      }
+
       const { data, error } = await supabase
         .from("short_term_memory")
         .insert({
-          content: memory.content,
+          content: processedContent,
           source: memory.source,
           source_id: memory.source_id || null,
           relevance_score: memory.relevance_score,

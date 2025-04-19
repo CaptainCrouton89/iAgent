@@ -10,12 +10,104 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { useChat } from "@ai-sdk/react";
 import { Send } from "lucide-react";
+import { FormEvent, useCallback, useState } from "react";
+
+// Custom types for our chat application
+interface Message {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+}
+
+// Custom hook to handle chat functionality
+function useCustomChat() {
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [input, setInput] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleInputChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      setInput(e.target.value);
+    },
+    []
+  );
+
+  const handleSubmit = useCallback(
+    async (e: FormEvent<HTMLFormElement>) => {
+      e.preventDefault();
+      if (!input.trim() || isLoading) return;
+
+      // Add user message to chat
+      const userMessage: Message = {
+        id: Date.now().toString(),
+        role: "user",
+        content: input.trim(),
+      };
+
+      setMessages((messages) => [...messages, userMessage]);
+      setInput("");
+      setIsLoading(true);
+
+      try {
+        // Format messages for the API
+        const apiMessages = messages.map((msg) => ({
+          role: msg.role,
+          content: msg.content,
+        }));
+
+        // Add the new user message
+        apiMessages.push({
+          role: "user",
+          content: userMessage.content,
+        });
+
+        // Call our API
+        const response = await fetch("/api/chat", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ messages: apiMessages }),
+        });
+
+        if (!response.ok) {
+          throw new Error(`Error: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+
+        // Add assistant response to chat
+        setMessages((messages) => [
+          ...messages,
+          {
+            id: Date.now().toString(),
+            role: "assistant",
+            content: data.text,
+          },
+        ]);
+      } catch (error) {
+        console.error("Error sending message:", error);
+        // Optionally add an error message to the chat
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [input, isLoading, messages]
+  );
+
+  return {
+    messages,
+    input,
+    handleInputChange,
+    handleSubmit,
+    isLoading,
+  };
+}
 
 export default function Home() {
   const { messages, input, handleInputChange, handleSubmit, isLoading } =
-    useChat();
+    useCustomChat();
 
   return (
     <div className="flex items-center justify-center min-h-screen p-4">
@@ -55,19 +147,7 @@ export default function Home() {
                       : "bg-primary text-primary-foreground"
                   }`}
                 >
-                  {message.parts.map((part, i) => {
-                    switch (part.type) {
-                      case "text":
-                        return (
-                          <div
-                            key={`${message.id}-${i}`}
-                            className="whitespace-pre-wrap"
-                          >
-                            {part.text}
-                          </div>
-                        );
-                    }
-                  })}
+                  <div className="whitespace-pre-wrap">{message.content}</div>
                 </div>
               </div>
             ))}
