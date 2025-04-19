@@ -41,13 +41,74 @@ export interface MailgunWebhookPayload {
 
 export class EmailService {
   private mailgunClient: mailgun.Mailgun;
+  private apiKey: string;
+  private domain: string;
+  private sender: string;
 
   constructor() {
+    // Get environment variables
+    this.apiKey = process.env.MAILGUN_API_KEY || "";
+    this.domain = process.env.MAILGUN_DOMAIN || "";
+    this.sender =
+      process.env.EMAIL_SENDER || `The Mind <the-mind@${this.domain}>`;
+
+    // Validate configuration
+    if (!this.apiKey) {
+      throw new Error(
+        "MAILGUN_API_KEY is not configured in environment variables"
+      );
+    }
+
+    if (!this.domain) {
+      throw new Error(
+        "MAILGUN_DOMAIN is not configured in environment variables"
+      );
+    }
+
     // Initialize Mailgun client
     this.mailgunClient = mailgun({
-      apiKey: process.env.MAILGUN_API_KEY! || "",
-      domain: process.env.MAILGUN_DOMAIN! || "",
+      apiKey: this.apiKey,
+      domain: this.domain,
     });
+
+    console.log(
+      `Mailgun initialized with domain: ${
+        this.domain
+      } and API key: ${this.apiKey.substring(0, 5)}...`
+    );
+    console.log(`Using sender: ${this.sender}`);
+  }
+
+  /**
+   * Validates if an email address is properly formatted
+   */
+  private isValidEmailFormat(email: string): boolean {
+    // Basic email format validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    // Check if it's in "Name <email@domain.com>" format
+    const nameEmailRegex = /^.+\s<[^\s@]+@[^\s@]+\.[^\s@]+>$/;
+
+    return emailRegex.test(email) || nameEmailRegex.test(email);
+  }
+
+  /**
+   * Ensures a properly formatted email address
+   */
+  private formatEmailAddress(email: string, defaultDomain: string): string {
+    if (this.isValidEmailFormat(email)) {
+      return email;
+    }
+
+    // If it's just a name, format it as "Name <name@domain>"
+    if (!email.includes("@") && !email.includes("<")) {
+      return `${email} <${email
+        .toLowerCase()
+        .replace(/\s+/g, "-")}@${defaultDomain}>`;
+    }
+
+    // Default fallback
+    return `Sender <noreply@${defaultDomain}>`;
   }
 
   /**
@@ -88,15 +149,25 @@ export class EmailService {
       throw new Error("No recipient provided for email reply");
     }
 
+    // Ensure proper email format
+    const formattedSender = this.formatEmailAddress(this.sender, this.domain);
+    const formattedRecipient = this.formatEmailAddress(recipient, this.domain);
+
+    console.log(
+      `Sending email from: ${formattedSender} to: ${formattedRecipient}`
+    );
+
     // Create data object that conforms to mailgun's SendData type
     const data: mailgun.messages.SendData = {
-      from: process.env.EMAIL_SENDER || "The Mind <the-mind@agent-hyve.com>",
-      to: recipient,
+      from: formattedSender,
+      to: formattedRecipient,
       subject: `Re: ${subject}`,
       text: replyContent,
       "h:In-Reply-To": emailData.originalEmailId,
       "h:References": emailData.originalEmailId,
     };
+
+    console.log(`Attempting to send email to: ${formattedRecipient}`);
 
     // Note about attachments: To handle attachments in replies,
     // you would need to convert the File objects to Mailgun's attachment format
@@ -105,8 +176,10 @@ export class EmailService {
     return new Promise((resolve, reject) => {
       this.mailgunClient.messages().send(data, (error, body) => {
         if (error) {
+          console.error("Mailgun API error:", error);
           reject(error);
         } else {
+          console.log("Email sent successfully:", body);
           resolve(body);
         }
       });
