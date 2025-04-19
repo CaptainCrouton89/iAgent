@@ -350,16 +350,49 @@ ${recentMemories
         }
 
         // Save extracted emails to contacts if available
-        if (result.emails && result.emails.length > 0 && this.contactsService) {
-          this.log("minimal", `Found ${result.emails.length} emails to save`);
+        if (this.contactsService) {
+          // Use emails from AI extraction or fall back to regex extraction
+          let emailsToSave: string[] = [];
 
-          for (const email of result.emails) {
-            try {
-              await this.contactsService.saveContact({ email });
-              this.log("detailed", `Saved contact: ${email}`);
-            } catch (error) {
-              this.log("minimal", `Error saving contact ${email}`, error);
-              console.error(`Error saving contact ${email}:`, error);
+          if (result.emails && result.emails.length > 0) {
+            emailsToSave = result.emails;
+            this.log(
+              "minimal",
+              `Found ${emailsToSave.length} emails from AI extraction`
+            );
+          } else {
+            // Try to extract emails using regex as fallback
+            let contentText = "";
+
+            if (data.source === "email") {
+              const emailData = data.content as EmailData;
+              contentText = `${emailData.from} ${emailData.subject} ${emailData.body}`;
+            } else if (data.source === "chat") {
+              const content = data.content as Record<string, unknown>;
+              contentText = String(content.message || "");
+            } else {
+              contentText = JSON.stringify(data.content);
+            }
+
+            emailsToSave = this.extractEmailAddresses(contentText);
+            this.log(
+              "minimal",
+              `Found ${emailsToSave.length} emails from regex fallback`
+            );
+          }
+
+          // Save the extracted emails
+          if (emailsToSave.length > 0) {
+            this.log("minimal", `Saving ${emailsToSave.length} contacts`);
+
+            for (const email of emailsToSave) {
+              try {
+                await this.contactsService.saveContact({ email });
+                this.log("detailed", `Saved contact: ${email}`);
+              } catch (error) {
+                this.log("minimal", `Error saving contact ${email}`, error);
+                console.error(`Error saving contact ${email}:`, error);
+              }
             }
           }
         }
