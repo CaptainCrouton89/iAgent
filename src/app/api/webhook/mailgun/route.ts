@@ -22,14 +22,6 @@ export async function POST(req: Request) {
       }
     }
 
-    // Check if this is an inbound email event
-    if (mailgunData.event !== "inbound") {
-      return NextResponse.json(
-        { message: "Not an inbound email event" },
-        { status: 200 }
-      );
-    }
-
     // Ensure required fields are present
     if (!mailgunData.sender || !mailgunData.recipient || !mailgunData.subject) {
       return NextResponse.json(
