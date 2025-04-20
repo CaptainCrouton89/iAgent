@@ -17,7 +17,14 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 type Message = {
   id: string;
   role: "user" | "assistant";
-  content: string;
+  content: string | { type: string; text: string }[];
+};
+
+const getContent = (message: Message) => {
+  if (typeof message.content === "string") {
+    return message.content;
+  }
+  return message.content.map((item) => item.text).join("");
 };
 
 export default function PlannerPage() {
@@ -43,9 +50,8 @@ export default function PlannerPage() {
 
     // Check if it matches the tool ID pattern
     const toolIdPattern = /^\[\w+: ToolId: \d+\]/;
-    return toolIdPattern.test(message.content);
+    return toolIdPattern.test(getContent(message));
   };
-
   // Start streaming messages when component mounts
   useEffect(() => {
     let eventSource: EventSource;
@@ -167,6 +173,8 @@ export default function PlannerPage() {
     }
   };
 
+  console.log(messages);
+
   return (
     <div className="flex-1 flex flex-col min-h-[calc(100vh-73px)]">
       <Card className="flex-1 flex flex-col shadow-none border-0 rounded-none">
@@ -222,7 +230,7 @@ export default function PlannerPage() {
                     }`}
                   >
                     <div className="markdown-content">
-                      <Markdown>{message.content}</Markdown>
+                      <Markdown>{getContent(message)}</Markdown>
                     </div>
                   </div>
                 </div>
