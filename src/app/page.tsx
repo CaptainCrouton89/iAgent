@@ -12,6 +12,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Send } from "lucide-react";
 import { FormEvent, useCallback, useState } from "react";
+import Navigation from "./nav";
 
 // Custom types for our chat application
 interface Message {
@@ -110,20 +111,24 @@ export default function Home() {
     useCustomChat();
 
   return (
-    <div className="flex items-center justify-center min-h-screen p-4">
-      <Card className="w-full max-w-2xl shadow-xl">
-        <CardHeader className="pb-4 border-b">
+    <div className="h-full overflow-hidden flex flex-col p-3">
+      <div className="mb-2">
+        <Navigation />
+      </div>
+
+      <Card className="flex-1 flex flex-col w-full max-w-4xl mx-auto shadow-xl">
+        <CardHeader className="py-3 px-4 border-b">
           <CardTitle className="text-xl font-bold text-center">
             AI Chat Assistant
           </CardTitle>
         </CardHeader>
 
-        <CardContent className="p-6 h-[60vh] overflow-y-auto">
-          <div className="space-y-6">
+        <CardContent className="flex-1 p-4 overflow-y-auto">
+          <div className="space-y-4">
             {messages.map((message) => (
               <div
                 key={message.id}
-                className={`flex items-start gap-3 ${
+                className={`flex items-start gap-2 ${
                   message.role === "user" ? "flex-row-reverse" : ""
                 }`}
               >
@@ -141,7 +146,7 @@ export default function Home() {
                 </Avatar>
 
                 <div
-                  className={`p-4 rounded-lg max-w-[80%] ${
+                  className={`p-3 rounded-lg max-w-[80%] ${
                     message.role === "user"
                       ? "bg-secondary text-secondary-foreground"
                       : "bg-primary text-primary-foreground"
@@ -153,12 +158,12 @@ export default function Home() {
             ))}
 
             {isLoading && (
-              <div className="flex items-start gap-3">
+              <div className="flex items-start gap-2">
                 <Avatar className="bg-primary">
                   <AvatarFallback>AI</AvatarFallback>
                   <AvatarImage src="/ai-avatar.svg" alt="AI" />
                 </Avatar>
-                <div className="bg-primary text-primary-foreground p-4 rounded-lg max-w-[80%]">
+                <div className="bg-primary text-primary-foreground p-3 rounded-lg max-w-[80%]">
                   <div className="flex items-center gap-2">
                     <div className="h-2 w-2 rounded-full bg-white animate-bounce [animation-delay:-0.3s]"></div>
                     <div className="h-2 w-2 rounded-full bg-white animate-bounce [animation-delay:-0.15s]"></div>
@@ -169,7 +174,7 @@ export default function Home() {
             )}
 
             {messages.length === 0 && !isLoading && (
-              <div className="py-20 text-center text-muted-foreground">
+              <div className="py-10 text-center text-muted-foreground">
                 <p className="text-lg mb-2">
                   Welcome to the AI Chat Assistant!
                 </p>
@@ -179,7 +184,7 @@ export default function Home() {
           </div>
         </CardContent>
 
-        <CardFooter className="p-4 border-t">
+        <CardFooter className="py-2 px-4 border-t">
           <form onSubmit={handleSubmit} className="flex w-full gap-2">
             <Input
               placeholder="Type your message..."

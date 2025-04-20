@@ -68,7 +68,7 @@ export default function PlannerPage() {
 
     const startStreaming = () => {
       setIsLoading(true);
-      eventSource = new EventSource("/api/planner/stream");
+      eventSource = new EventSource("/api/agents/stream");
 
       // Listen for the 'connected' event
       eventSource.addEventListener("connected", () => {
@@ -172,7 +172,7 @@ export default function PlannerPage() {
 
     try {
       // Send message to the endpoint
-      const response = await fetch("/api/planner/send", {
+      const response = await fetch("/api/agents/send", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -200,7 +200,7 @@ export default function PlannerPage() {
     setError(null);
 
     try {
-      const response = await fetch("/api/planner/clear", {
+      const response = await fetch("/api/agents/clear", {
         method: "DELETE",
       });
 

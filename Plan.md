@@ -155,3 +155,93 @@ Requests to agent:
 - agent/[agentId]/webhook/[path] for finished jobs or just agent/[agentId]/webhook if no path specified.
   - Webhook hit with agent id and job data in body
   - Will prompt agent with: "Job [id] returned with data: { }"
+
+# Supabase Authentication Implementation Plan
+
+## 1. Setup and Configuration
+
+- Install required packages
+  ```bash
+  pnpm add @supabase/supabase-js @supabase/ssr
+  ```
+- Configure environment variables
+  - Create `.env.local` file with Supabase URL and anon key
+  - Add these to `.gitignore` if not already there
+
+## 2. Client Creation Utilities
+
+- Create utility functions for Supabase clients
+  - Create `utils/supabase/client.ts` for browser client
+  - Create `utils/supabase/server.ts` for server-side client
+  - Create `utils/supabase/middleware.ts` for auth middleware helpers
+
+## 3. Middleware Setup
+
+- Create `middleware.ts` at the project root
+  - Implement session refreshing logic
+  - Add appropriate matchers to exclude static assets
+  - Configure to update auth tokens automatically
+
+## 4. Authentication UI and Routes
+
+- Create login page (`app/login/page.tsx`)
+  - Implement email/password login form
+  - Add server actions for login/signup (`app/login/actions.ts`)
+- Create signup page or component
+  - Implement registration form
+  - Handle form submission via server actions
+- Create logout functionality
+  - Implement server action for logging out
+
+## 5. Email Confirmation Flow
+
+- Update Supabase email templates in the dashboard
+  - Change confirmation URL format to support server-side flow
+- Create confirmation handler
+  - Implement `app/auth/confirm/route.ts` to handle email confirmations
+  - Set up token verification and redirection
+
+## 6. Protected Routes
+
+- Create authentication checking utilities
+  - Add helper for checking auth status in server components
+- Implement protected routes
+  - Create example private page (`app/private/page.tsx`)
+  - Add authentication checks and redirects
+
+## 7. User Profile Management
+
+- Create user profile page
+  - Display user information
+  - Allow editing profile details
+- Implement password reset functionality
+  - Create forgot password page
+  - Set up email templates for password reset
+
+## 8. Testing and Validation
+
+- Test authentication flows
+  - Registration
+  - Login
+  - Email confirmation
+  - Password reset
+  - Protected routes
+- Verify session persistence
+  - Test session refresh functionality
+  - Verify token refresh in middleware
+
+## 9. Additional Features (Optional)
+
+- Social login integration
+  - Google, GitHub, etc.
+- Multi-factor authentication
+  - SMS or TOTP setup
+- User role management
+  - Admin vs regular users
+  - Role-based access control
+
+## 10. Deployment Considerations
+
+- Ensure environment variables are set in production
+- Configure Supabase production settings
+- Test auth flows in staging/production environments
