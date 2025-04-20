@@ -22,6 +22,30 @@ import {
   normalizeEventData,
 } from "./utils/helpers";
 
+// Helper to check if a string is a JSON array of tool responses
+const isJsonToolResponseArray = (content: string): boolean => {
+  try {
+    const trimmedContent = content.trim();
+    if (trimmedContent.startsWith("[") && trimmedContent.endsWith("]")) {
+      const parsed = JSON.parse(trimmedContent);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed.some(
+          (item) =>
+            item &&
+            typeof item === "object" &&
+            "toolName" in item &&
+            "toolCallId" in item &&
+            "data" in item
+        );
+      }
+    }
+    return false;
+  } catch {
+    // Ignore parsing errors
+    return false;
+  }
+};
+
 export default function PlannerPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -66,18 +90,28 @@ export default function PlannerPage() {
           const processedMessages = parsedMessages.map((message) => {
             if (
               message.role === "user" &&
-              typeof message.content === "string" &&
-              containsMultipleJsonObjects(message.content)
+              typeof message.content === "string"
             ) {
-              // Check if we have valid tool responses in the content
-              const jsonResponses = extractJsonObjects(message.content);
-              if (jsonResponses.length > 0) {
-                console.log(
-                  "Found JSON tool responses in user message:",
-                  jsonResponses.length
-                );
+              const trimmedContent = message.content.trim();
+
+              // Check if the content is a JSON array of tool responses
+              if (isJsonToolResponseArray(trimmedContent)) {
+                console.log("Found JSON array tool responses");
                 // We don't modify the original message but the MessageBubble component
                 // will use isDisplayedAsAssistant to determine how to display it
+              }
+              // Check for embedded JSON objects
+              else if (containsMultipleJsonObjects(trimmedContent)) {
+                // Check if we have valid tool responses in the content
+                const jsonResponses = extractJsonObjects(trimmedContent);
+                if (jsonResponses.length > 0) {
+                  console.log(
+                    "Found JSON tool responses in user message:",
+                    jsonResponses.length
+                  );
+                  // We don't modify the original message but the MessageBubble component
+                  // will use isDisplayedAsAssistant to determine how to display it
+                }
               }
             }
             return message;

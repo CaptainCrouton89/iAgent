@@ -145,9 +145,33 @@ export const isDisplayedAsAssistant = (message: Message): boolean => {
 
   // Check if it's a JSON tool response (coming from user message)
   if (message.role === "user" && typeof message.content === "string") {
+    const content = message.content.trim();
+
+    // Check if content is a JSON array
+    if (content.startsWith("[") && content.endsWith("]")) {
+      try {
+        const parsedArray = JSON.parse(content);
+        if (Array.isArray(parsedArray) && parsedArray.length > 0) {
+          // Check if the array contains valid tool responses
+          return parsedArray.some(
+            (item) =>
+              item &&
+              typeof item === "object" &&
+              "toolName" in item &&
+              "toolCallId" in item &&
+              "data" in item &&
+              (typeof item.success === "boolean" || "success" in item)
+          );
+        }
+      } catch (e) {
+        // If parsing fails, continue with other checks
+        console.error("Error parsing potential JSON array:", e);
+      }
+    }
+
     // First check if it contains tool response JSON objects
-    if (containsMultipleJsonObjects(message.content)) {
-      const jsonObjects = extractJsonObjects(message.content);
+    if (containsMultipleJsonObjects(content)) {
+      const jsonObjects = extractJsonObjects(content);
       if (jsonObjects.length > 0) {
         // Verify these are legitimate tool responses (not just any JSON)
         const validToolResponses = jsonObjects.filter(
@@ -163,7 +187,7 @@ export const isDisplayedAsAssistant = (message: Message): boolean => {
 
     // Check if it matches the legacy tool ID pattern (for backward compatibility)
     const toolIdPattern = /^\[\w+: ToolId: \d+\]/;
-    return toolIdPattern.test(message.content);
+    return toolIdPattern.test(content);
   }
 
   return false;

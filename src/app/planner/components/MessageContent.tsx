@@ -110,12 +110,46 @@ const MultipleJsonToolResponses = ({
   </div>
 );
 
+// Parse JSON array string into array of JsonToolResponseType
+const parseJsonArray = (content: string): JsonToolResponseType[] => {
+  try {
+    const trimmedContent = content.trim();
+    if (trimmedContent.startsWith("[") && trimmedContent.endsWith("]")) {
+      const parsedArray = JSON.parse(trimmedContent);
+      if (Array.isArray(parsedArray)) {
+        return parsedArray.filter(
+          (item) =>
+            item &&
+            typeof item === "object" &&
+            "toolName" in item &&
+            "toolCallId" in item &&
+            "data" in item
+        );
+      }
+    }
+    return [];
+  } catch (e) {
+    console.error("Error parsing JSON array:", e);
+    return [];
+  }
+};
+
 export function MessageContent({ message }: { message: Message }): ReactNode {
   // Handle string content
   if (typeof message.content === "string") {
+    const trimmedContent = message.content.trim();
+
+    // Check if the content is a JSON array
+    if (trimmedContent.startsWith("[") && trimmedContent.endsWith("]")) {
+      const jsonResponses = parseJsonArray(trimmedContent);
+      if (jsonResponses.length > 0) {
+        return <MultipleJsonToolResponses jsonDataList={jsonResponses} />;
+      }
+    }
+
     // Check if the content contains JSON tool responses
-    if (containsMultipleJsonObjects(message.content)) {
-      const jsonResponses = extractJsonObjects(message.content);
+    if (containsMultipleJsonObjects(trimmedContent)) {
+      const jsonResponses = extractJsonObjects(trimmedContent);
       if (jsonResponses.length > 0) {
         console.log("Rendering JSON tool responses:", jsonResponses.length);
         return <MultipleJsonToolResponses jsonDataList={jsonResponses} />;

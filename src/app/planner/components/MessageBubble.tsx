@@ -11,12 +11,49 @@ interface MessageBubbleProps {
   isAssistant: boolean;
 }
 
+// Helper to check if a string is a JSON array of tool responses
+const isJsonToolResponseArray = (content: string): boolean => {
+  try {
+    const trimmedContent = content.trim();
+    if (trimmedContent.startsWith("[") && trimmedContent.endsWith("]")) {
+      const parsed = JSON.parse(trimmedContent);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed.some(
+          (item) =>
+            item &&
+            typeof item === "object" &&
+            "toolName" in item &&
+            "toolCallId" in item &&
+            "data" in item
+        );
+      }
+    }
+    return false;
+  } catch {
+    // Ignore parsing errors
+    return false;
+  }
+};
+
 export function MessageBubble({ message, isAssistant }: MessageBubbleProps) {
   // Check if this message contains JSON tool responses directly
-  const hasJsonToolResponses =
-    typeof message.content === "string" &&
-    containsMultipleJsonObjects(message.content) &&
-    extractJsonObjects(message.content).length > 0;
+  let hasJsonToolResponses = false;
+
+  if (typeof message.content === "string") {
+    const trimmedContent = message.content.trim();
+
+    // Check for JSON array of tool responses
+    if (isJsonToolResponseArray(trimmedContent)) {
+      hasJsonToolResponses = true;
+    }
+    // Check for embedded JSON tool responses
+    else if (
+      containsMultipleJsonObjects(trimmedContent) &&
+      extractJsonObjects(trimmedContent).length > 0
+    ) {
+      hasJsonToolResponses = true;
+    }
+  }
 
   // Use either the passed isAssistant prop or check for JSON tool responses
   const shouldDisplayAsAssistant = isAssistant || hasJsonToolResponses;
