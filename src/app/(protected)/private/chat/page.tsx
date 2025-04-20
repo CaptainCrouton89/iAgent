@@ -2,13 +2,6 @@
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Send, Trash2 } from "lucide-react";
 import { FormEvent, useEffect, useRef, useState } from "react";
@@ -220,95 +213,93 @@ export default function PlannerPage() {
   };
 
   return (
-    <div className="flex-1 flex flex-col min-h-[calc(100vh-73px)] bg-gray-50">
-      <Card className="flex-1 flex flex-col shadow-sm border-gray-200 rounded-none">
-        <CardHeader className="pb-4 border-b bg-white flex flex-row items-center justify-between">
-          <CardTitle className="text-xl font-bold flex items-center text-gray-800">
-            AI Planner Assistant
-            {isConnected && (
-              <span className="ml-2 text-xs text-green-500">(Connected)</span>
-            )}
-          </CardTitle>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleClearHistory}
-            disabled={isClearing || messages.length === 0}
-            className="flex items-center gap-1 text-gray-600 border-gray-300 hover:bg-gray-100"
-          >
-            <Trash2 className="h-4 w-4" />
-            Clear History
-          </Button>
-        </CardHeader>
+    <div className="flex-1 flex flex-col bg-gray-50 min-h-0 container mx-auto">
+      <div className="flex flex-row items-center justify-between border-b p-4">
+        <h1 className="text-xl font-bold flex items-center text-gray-800">
+          AI Planner Assistant
+          {isConnected && (
+            <span className="ml-2 text-xs text-green-500">(Connected)</span>
+          )}
+        </h1>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleClearHistory}
+          disabled={isClearing || messages.length === 0}
+          className="flex items-center gap-1 text-gray-600 border-gray-300 hover:bg-gray-100"
+        >
+          <Trash2 className="h-4 w-4" />
+          Clear History
+        </Button>
+      </div>
 
-        <CardContent className="flex-1 p-6 overflow-y-auto bg-gray-50">
-          <div className="space-y-6">
-            {messages.map((message, index) => (
-              <MessageBubble
-                key={index}
-                message={message}
-                isAssistant={isDisplayedAsAssistant(message)}
-              />
-            ))}
+      <div className="flex-1 p-6 overflow-y-auto bg-gray-50">
+        <div className="space-y-6">
+          {messages.map((message, index) => (
+            <MessageBubble
+              key={index}
+              message={message}
+              isAssistant={isDisplayedAsAssistant(message)}
+            />
+          ))}
 
-            {isLoading && (
-              <div className="flex items-start gap-3">
-                <Avatar className="bg-blue-500 text-white">
-                  <AvatarFallback>AI</AvatarFallback>
-                  <AvatarImage src="/ai-avatar.svg" alt="AI" />
-                </Avatar>
-                <div className="bg-white border border-gray-200 shadow-sm p-4 rounded-lg max-w-[80%]">
-                  <div className="flex items-center gap-2">
-                    <div className="h-2 w-2 rounded-full bg-blue-500 animate-bounce [animation-delay:-0.3s]"></div>
-                    <div className="h-2 w-2 rounded-full bg-blue-500 animate-bounce [animation-delay:-0.15s]"></div>
-                    <div className="h-2 w-2 rounded-full bg-blue-500 animate-bounce"></div>
-                  </div>
+          {isLoading && (
+            <div className="flex items-start gap-3">
+              <Avatar className="bg-blue-500 text-white">
+                <AvatarFallback>AI</AvatarFallback>
+                <AvatarImage src="/ai-avatar.svg" alt="AI" />
+              </Avatar>
+              <div className="bg-white border border-gray-200 shadow-sm p-4 rounded-lg max-w-[80%]">
+                <div className="flex items-center gap-2">
+                  <div className="h-2 w-2 rounded-full bg-blue-500 animate-bounce [animation-delay:-0.3s]"></div>
+                  <div className="h-2 w-2 rounded-full bg-blue-500 animate-bounce [animation-delay:-0.15s]"></div>
+                  <div className="h-2 w-2 rounded-full bg-blue-500 animate-bounce"></div>
                 </div>
               </div>
-            )}
+            </div>
+          )}
 
-            {error && (
-              <div className="p-4 bg-red-50 text-red-700 border border-red-200 rounded-lg">
-                Error: {error.message}
-              </div>
-            )}
+          {error && (
+            <div className="p-4 bg-red-50 text-red-700 border border-red-200 rounded-lg">
+              Error: {error.message}
+            </div>
+          )}
 
-            {messages.length === 0 && !isLoading && (
-              <div className="py-20 text-center text-gray-500">
-                <p className="text-lg mb-2 font-medium">
-                  Welcome to the AI Planner Assistant!
-                </p>
-                <p>
-                  Start planning by typing a message like &ldquo;Help me plan my
-                  week&rdquo; or &ldquo;I need to organize a project&rdquo;.
-                </p>
-              </div>
-            )}
+          {messages.length === 0 && !isLoading && (
+            <div className="py-20 text-center text-gray-500">
+              <p className="text-lg mb-2 font-medium">
+                Welcome to the AI Planner Assistant!
+              </p>
+              <p>
+                Start planning by typing a message like &ldquo;Help me plan my
+                week&rdquo; or &ldquo;I need to organize a project&rdquo;.
+              </p>
+            </div>
+          )}
 
-            <div ref={messagesEndRef} />
-          </div>
-        </CardContent>
+          <div ref={messagesEndRef} />
+        </div>
+      </div>
 
-        <CardFooter className="p-4 border-t bg-white">
-          <form onSubmit={handleFormSubmit} className="flex w-full gap-2">
-            <Input
-              placeholder="Type your message..."
-              value={input}
-              onChange={handleInputChange}
-              className="flex-1 border-gray-300 focus:border-blue-500 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
-              disabled={isLoading}
-            />
-            <Button
-              type="submit"
-              className="bg-blue-500 hover:bg-blue-600 text-white"
-              disabled={isLoading || !input.trim()}
-            >
-              <Send className="h-4 w-4 mr-2" />
-              Send
-            </Button>
-          </form>
-        </CardFooter>
-      </Card>
+      <div className="p-4 border-t">
+        <form onSubmit={handleFormSubmit} className="flex w-full gap-2">
+          <Input
+            placeholder="Type your message..."
+            value={input}
+            onChange={handleInputChange}
+            className="flex-1 border-gray-300 focus:border-blue-500 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
+            disabled={isLoading}
+          />
+          <Button
+            type="submit"
+            className="bg-blue-500 hover:bg-blue-600 text-white"
+            disabled={isLoading || !input.trim()}
+          >
+            <Send className="h-4 w-4 mr-2" />
+            Send
+          </Button>
+        </form>
+      </div>
     </div>
   );
 }

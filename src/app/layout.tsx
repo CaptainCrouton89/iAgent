@@ -46,7 +46,9 @@ export default function RootLayout({
               </nav>
             </div>
           </header>
-          <main className="flex-1 overflow-hidden">{children}</main>
+          <main className="flex-1 overflow-hidden flex flex-col">
+            {children}
+          </main>
         </div>
       </body>
     </html>
