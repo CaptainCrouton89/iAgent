@@ -10,16 +10,21 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { useChat } from "@ai-sdk/react";
 import { Send } from "lucide-react";
-import { FormEvent, useRef } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
+
+type Message = {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+};
 
 export default function PlannerPage() {
-  const { messages, input, handleInputChange, handleSubmit, isLoading, error } =
-    useChat({
-      api: "/api/planner",
-      id: "planner",
-    });
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [input, setInput] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+  const [isConnected, setIsConnected] = useState(false);
 
   // Reference for auto-scrolling to bottom
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -29,15 +34,109 @@ export default function PlannerPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  // Scroll to bottom when messages change
-  if (typeof window !== "undefined") {
-    setTimeout(scrollToBottom, 100);
-  }
+  // Function to determine if a message should be displayed as an assistant message
+  const isDisplayedAsAssistant = (message: Message) => {
+    // Check if it's already an assistant message
+    if (message.role === "assistant") return true;
 
-  const handleFormSubmit = (e: FormEvent<HTMLFormElement>) => {
+    // Check if it matches the tool ID pattern
+    const toolIdPattern = /^\[\w+: ToolId: \d+\]/;
+    return toolIdPattern.test(message.content);
+  };
+
+  // Start streaming messages when component mounts
+  useEffect(() => {
+    let eventSource: EventSource;
+
+    const startStreaming = () => {
+      setIsLoading(true);
+      eventSource = new EventSource("/api/planner/stream");
+
+      // Listen for the 'connected' event
+      eventSource.addEventListener("connected", () => {
+        console.log("Connected to event stream");
+        setIsConnected(true);
+        setIsLoading(false);
+      });
+
+      // Listen for the 'messages' event
+      eventSource.addEventListener("messages", (event) => {
+        try {
+          const newMessages = JSON.parse(event.data) as Message[];
+          setMessages(newMessages);
+          setIsLoading(false);
+        } catch (err) {
+          console.error("Error parsing messages:", err);
+        }
+      });
+
+      // Handle all errors
+      eventSource.onerror = () => {
+        console.error("EventSource error");
+        setError(new Error("Connection error. Please try again."));
+        setIsLoading(false);
+        setIsConnected(false);
+        eventSource.close();
+        // Try to reconnect after a delay
+        setTimeout(startStreaming, 5000);
+      };
+    };
+
+    startStreaming();
+
+    // Cleanup function
+    return () => {
+      if (eventSource) {
+        eventSource.close();
+      }
+    };
+  }, []);
+
+  // Scroll to bottom when messages change
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setInput(e.target.value);
+  };
+
+  const handleFormSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!input.trim() || isLoading) return;
-    handleSubmit(e);
+
+    const userMessage = {
+      id: Date.now().toString(),
+      role: "user" as const,
+      content: input.trim(),
+    };
+
+    // Add user message to UI immediately
+    setMessages((prev) => [...prev, userMessage]);
+    setInput("");
+    setIsLoading(true);
+
+    try {
+      // Send message to the endpoint
+      const response = await fetch("/api/planner/send", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ message: userMessage.content }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to send message");
+      }
+
+      // Note: We don't need to handle the response here as the stream will receive the assistant's reply
+    } catch (err) {
+      setError(
+        err instanceof Error ? err : new Error("An unknown error occurred")
+      );
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -46,42 +145,49 @@ export default function PlannerPage() {
         <CardHeader className="pb-4 border-b bg-zinc-50 dark:bg-zinc-900">
           <CardTitle className="text-xl font-bold">
             AI Planner Assistant
+            {isConnected && (
+              <span className="ml-2 text-xs text-green-500">(Connected)</span>
+            )}
           </CardTitle>
         </CardHeader>
 
         <CardContent className="flex-1 p-6 overflow-y-auto">
           <div className="space-y-6">
-            {messages.map((message) => (
-              <div
-                key={message.id}
-                className={`flex items-start gap-3 ${
-                  message.role === "user" ? "flex-row-reverse" : ""
-                }`}
-              >
-                <Avatar
-                  className={
-                    message.role === "user" ? "bg-secondary" : "bg-primary"
-                  }
-                >
-                  <AvatarFallback>
-                    {message.role === "user" ? "U" : "AI"}
-                  </AvatarFallback>
-                  {message.role !== "user" && (
-                    <AvatarImage src="/ai-avatar.svg" alt="AI" />
-                  )}
-                </Avatar>
+            {messages.map((message, index) => {
+              const displayAsAssistant = isDisplayedAsAssistant(message);
 
+              return (
                 <div
-                  className={`p-4 rounded-lg max-w-[80%] ${
-                    message.role === "user"
-                      ? "bg-secondary text-secondary-foreground"
-                      : "bg-primary text-primary-foreground"
+                  key={index}
+                  className={`flex items-start gap-3 ${
+                    !displayAsAssistant ? "flex-row-reverse" : ""
                   }`}
                 >
-                  <div className="whitespace-pre-wrap">{message.content}</div>
+                  <Avatar
+                    className={
+                      !displayAsAssistant ? "bg-secondary" : "bg-primary"
+                    }
+                  >
+                    <AvatarFallback>
+                      {!displayAsAssistant ? "U" : "AI"}
+                    </AvatarFallback>
+                    {displayAsAssistant && (
+                      <AvatarImage src="/ai-avatar.svg" alt="AI" />
+                    )}
+                  </Avatar>
+
+                  <div
+                    className={`p-4 rounded-lg max-w-[80%] ${
+                      !displayAsAssistant
+                        ? "bg-secondary text-secondary-foreground"
+                        : "bg-primary text-primary-foreground"
+                    }`}
+                  >
+                    <div className="whitespace-pre-wrap">{message.content}</div>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
 
             {isLoading && (
               <div className="flex items-start gap-3">
