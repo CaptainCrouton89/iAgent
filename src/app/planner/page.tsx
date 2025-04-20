@@ -11,21 +11,16 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Send, Trash2 } from "lucide-react";
-import Markdown from "markdown-to-jsx";
 import { FormEvent, useEffect, useRef, useState } from "react";
-
-type Message = {
-  id: string;
-  role: "user" | "assistant";
-  content: string | { type: string; text: string }[];
-};
-
-const getContent = (message: Message) => {
-  if (typeof message.content === "string") {
-    return message.content;
-  }
-  return message.content.map((item) => item.text).join("");
-};
+import { MessageBubble } from "./components/MessageBubble";
+import "./markdown.css";
+import { Message } from "./types";
+import {
+  containsMultipleJsonObjects,
+  extractJsonObjects,
+  isDisplayedAsAssistant,
+  normalizeEventData,
+} from "./utils/helpers";
 
 export default function PlannerPage() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -43,15 +38,6 @@ export default function PlannerPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  // Function to determine if a message should be displayed as an assistant message
-  const isDisplayedAsAssistant = (message: Message) => {
-    // Check if it's already an assistant message
-    if (message.role === "assistant") return true;
-
-    // Check if it matches the tool ID pattern
-    const toolIdPattern = /^\[\w+: ToolId: \d+\]/;
-    return toolIdPattern.test(getContent(message));
-  };
   // Start streaming messages when component mounts
   useEffect(() => {
     let eventSource: EventSource;
@@ -70,8 +56,34 @@ export default function PlannerPage() {
       // Listen for the 'messages' event
       eventSource.addEventListener("messages", (event) => {
         try {
-          const newMessages = JSON.parse(event.data) as Message[];
-          setMessages(newMessages);
+          // Normalize the event data (removing "data:" prefix if present)
+          const normalizedData = normalizeEventData(event.data);
+
+          // Parse the messages array
+          const parsedMessages = JSON.parse(normalizedData) as Message[];
+
+          // Process each message to handle JSON tool responses
+          const processedMessages = parsedMessages.map((message) => {
+            if (
+              message.role === "user" &&
+              typeof message.content === "string" &&
+              containsMultipleJsonObjects(message.content)
+            ) {
+              // Check if we have valid tool responses in the content
+              const jsonResponses = extractJsonObjects(message.content);
+              if (jsonResponses.length > 0) {
+                console.log(
+                  "Found JSON tool responses in user message:",
+                  jsonResponses.length
+                );
+                // We don't modify the original message but the MessageBubble component
+                // will use isDisplayedAsAssistant to determine how to display it
+              }
+            }
+            return message;
+          });
+
+          setMessages(processedMessages);
           setIsLoading(false);
         } catch (err) {
           console.error("Error parsing messages:", err);
@@ -173,13 +185,11 @@ export default function PlannerPage() {
     }
   };
 
-  console.log(messages);
-
   return (
-    <div className="flex-1 flex flex-col min-h-[calc(100vh-73px)]">
-      <Card className="flex-1 flex flex-col shadow-none border-0 rounded-none">
-        <CardHeader className="pb-4 border-b bg-zinc-50 dark:bg-zinc-900 flex flex-row items-center justify-between">
-          <CardTitle className="text-xl font-bold flex items-center">
+    <div className="flex-1 flex flex-col min-h-[calc(100vh-73px)] bg-gray-50">
+      <Card className="flex-1 flex flex-col shadow-sm border-gray-200 rounded-none">
+        <CardHeader className="pb-4 border-b bg-white flex flex-row items-center justify-between">
+          <CardTitle className="text-xl font-bold flex items-center text-gray-800">
             AI Planner Assistant
             {isConnected && (
               <span className="ml-2 text-xs text-green-500">(Connected)</span>
@@ -190,78 +200,48 @@ export default function PlannerPage() {
             size="sm"
             onClick={handleClearHistory}
             disabled={isClearing || messages.length === 0}
-            className="flex items-center gap-1"
+            className="flex items-center gap-1 text-gray-600 border-gray-300 hover:bg-gray-100"
           >
             <Trash2 className="h-4 w-4" />
             Clear History
           </Button>
         </CardHeader>
 
-        <CardContent className="flex-1 p-6 overflow-y-auto">
+        <CardContent className="flex-1 p-6 overflow-y-auto bg-gray-50">
           <div className="space-y-6">
-            {messages.map((message, index) => {
-              const displayAsAssistant = isDisplayedAsAssistant(message);
-
-              return (
-                <div
-                  key={index}
-                  className={`flex items-start gap-3 ${
-                    !displayAsAssistant ? "flex-row-reverse" : ""
-                  }`}
-                >
-                  <Avatar
-                    className={
-                      !displayAsAssistant ? "bg-secondary" : "bg-primary"
-                    }
-                  >
-                    <AvatarFallback>
-                      {!displayAsAssistant ? "U" : "AI"}
-                    </AvatarFallback>
-                    {displayAsAssistant && (
-                      <AvatarImage src="/ai-avatar.svg" alt="AI" />
-                    )}
-                  </Avatar>
-
-                  <div
-                    className={`p-4 rounded-lg max-w-[80%] ${
-                      !displayAsAssistant
-                        ? "bg-secondary text-secondary-foreground"
-                        : "bg-primary text-primary-foreground"
-                    }`}
-                  >
-                    <div className="markdown-content">
-                      <Markdown>{getContent(message)}</Markdown>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
+            {messages.map((message, index) => (
+              <MessageBubble
+                key={index}
+                message={message}
+                isAssistant={isDisplayedAsAssistant(message)}
+              />
+            ))}
 
             {isLoading && (
               <div className="flex items-start gap-3">
-                <Avatar className="bg-primary">
+                <Avatar className="bg-blue-500 text-white">
                   <AvatarFallback>AI</AvatarFallback>
                   <AvatarImage src="/ai-avatar.svg" alt="AI" />
                 </Avatar>
-                <div className="bg-primary text-primary-foreground p-4 rounded-lg max-w-[80%]">
+                <div className="bg-white border border-gray-200 shadow-sm p-4 rounded-lg max-w-[80%]">
                   <div className="flex items-center gap-2">
-                    <div className="h-2 w-2 rounded-full bg-white animate-bounce [animation-delay:-0.3s]"></div>
-                    <div className="h-2 w-2 rounded-full bg-white animate-bounce [animation-delay:-0.15s]"></div>
-                    <div className="h-2 w-2 rounded-full bg-white animate-bounce"></div>
+                    <div className="h-2 w-2 rounded-full bg-blue-500 animate-bounce [animation-delay:-0.3s]"></div>
+                    <div className="h-2 w-2 rounded-full bg-blue-500 animate-bounce [animation-delay:-0.15s]"></div>
+                    <div className="h-2 w-2 rounded-full bg-blue-500 animate-bounce"></div>
                   </div>
                 </div>
               </div>
             )}
 
             {error && (
-              <div className="p-4 bg-red-100 text-red-700 rounded-lg">
+              <div className="p-4 bg-red-50 text-red-700 border border-red-200 rounded-lg">
                 Error: {error.message}
               </div>
             )}
 
             {messages.length === 0 && !isLoading && (
-              <div className="py-20 text-center text-muted-foreground">
-                <p className="text-lg mb-2">
+              <div className="py-20 text-center text-gray-500">
+                <p className="text-lg mb-2 font-medium">
                   Welcome to the AI Planner Assistant!
                 </p>
                 <p>
@@ -275,18 +255,18 @@ export default function PlannerPage() {
           </div>
         </CardContent>
 
-        <CardFooter className="p-4 border-t">
+        <CardFooter className="p-4 border-t bg-white">
           <form onSubmit={handleFormSubmit} className="flex w-full gap-2">
             <Input
               placeholder="Type your message..."
               value={input}
               onChange={handleInputChange}
-              className="flex-1"
+              className="flex-1 border-gray-300 focus:border-blue-500 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
               disabled={isLoading}
             />
             <Button
               type="submit"
-              variant="default"
+              className="bg-blue-500 hover:bg-blue-600 text-white"
               disabled={isLoading || !input.trim()}
             >
               <Send className="h-4 w-4 mr-2" />
