@@ -20,6 +20,7 @@
     "ai": "^4.3.9",
     "axios": "^1.8.4",
     "mailgun-js": "^0.22.0",
+    "markdown-to-jsx": "^7.7.4",
     "newsapi": "^2.4.1",
     "next": "15.3.1",
     "openai": "^4.95.1",

@@ -10,7 +10,8 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Send } from "lucide-react";
+import { Send, Trash2 } from "lucide-react";
+import Markdown from "markdown-to-jsx";
 import { FormEvent, useEffect, useRef, useState } from "react";
 
 type Message = {
@@ -23,6 +24,7 @@ export default function PlannerPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isClearing, setIsClearing] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const [isConnected, setIsConnected] = useState(false);
 
@@ -139,16 +141,52 @@ export default function PlannerPage() {
     }
   };
 
+  const handleClearHistory = async () => {
+    if (isClearing || messages.length === 0) return;
+
+    setIsClearing(true);
+    setError(null);
+
+    try {
+      const response = await fetch("/api/planner/clear", {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to clear message history");
+      }
+
+      // Clear messages locally immediately
+      setMessages([]);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err : new Error("An unknown error occurred")
+      );
+    } finally {
+      setIsClearing(false);
+    }
+  };
+
   return (
     <div className="flex-1 flex flex-col min-h-[calc(100vh-73px)]">
       <Card className="flex-1 flex flex-col shadow-none border-0 rounded-none">
-        <CardHeader className="pb-4 border-b bg-zinc-50 dark:bg-zinc-900">
-          <CardTitle className="text-xl font-bold">
+        <CardHeader className="pb-4 border-b bg-zinc-50 dark:bg-zinc-900 flex flex-row items-center justify-between">
+          <CardTitle className="text-xl font-bold flex items-center">
             AI Planner Assistant
             {isConnected && (
               <span className="ml-2 text-xs text-green-500">(Connected)</span>
             )}
           </CardTitle>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleClearHistory}
+            disabled={isClearing || messages.length === 0}
+            className="flex items-center gap-1"
+          >
+            <Trash2 className="h-4 w-4" />
+            Clear History
+          </Button>
         </CardHeader>
 
         <CardContent className="flex-1 p-6 overflow-y-auto">
@@ -183,7 +221,9 @@ export default function PlannerPage() {
                         : "bg-primary text-primary-foreground"
                     }`}
                   >
-                    <div className="whitespace-pre-wrap">{message.content}</div>
+                    <div className="markdown-content">
+                      <Markdown>{message.content}</Markdown>
+                    </div>
                   </div>
                 </div>
               );
