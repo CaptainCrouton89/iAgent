@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Send, Trash2 } from "lucide-react";
 import { FormEvent, useEffect, useRef, useState } from "react";
+import { AgentSelector } from "./components/AgentSelector";
 import { MessageBubble } from "./components/MessageBubble";
 import "./markdown.css";
 import { Message } from "./types";
@@ -46,6 +47,7 @@ export default function PlannerPage() {
   const [isClearing, setIsClearing] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const [isConnected, setIsConnected] = useState(false);
+  const [selectedAgentId, setSelectedAgentId] = useState<string>("");
 
   // Reference for auto-scrolling to bottom
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -61,7 +63,15 @@ export default function PlannerPage() {
 
     const startStreaming = () => {
       setIsLoading(true);
-      eventSource = new EventSource("/api/agents/stream");
+      // Don't start streaming if no agent is selected
+      if (!selectedAgentId) {
+        setIsLoading(false);
+        return;
+      }
+
+      eventSource = new EventSource(
+        `/api/agents/stream?agentId=${selectedAgentId}`
+      );
 
       // Listen for the 'connected' event
       eventSource.addEventListener("connected", () => {
@@ -137,7 +147,7 @@ export default function PlannerPage() {
         eventSource.close();
       }
     };
-  }, []);
+  }, [selectedAgentId]);
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -170,7 +180,10 @@ export default function PlannerPage() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ message: userMessage.content }),
+        body: JSON.stringify({
+          message: userMessage.content,
+          agentId: selectedAgentId,
+        }),
       });
 
       if (!response.ok) {
@@ -193,9 +206,12 @@ export default function PlannerPage() {
     setError(null);
 
     try {
-      const response = await fetch("/api/agents/clear", {
-        method: "DELETE",
-      });
+      const response = await fetch(
+        `/api/agents/clear?agentId=${selectedAgentId}`,
+        {
+          method: "DELETE",
+        }
+      );
 
       if (!response.ok) {
         throw new Error("Failed to clear message history");
@@ -215,12 +231,18 @@ export default function PlannerPage() {
   return (
     <div className="flex-1 flex flex-col bg-gray-50 min-h-0 container mx-auto">
       <div className="flex flex-row items-center justify-between border-b p-4">
-        <h1 className="text-xl font-bold flex items-center text-gray-800">
-          AI Planner Assistant
-          {isConnected && (
-            <span className="ml-2 text-xs text-green-500">(Connected)</span>
-          )}
-        </h1>
+        <div className="flex items-center gap-4">
+          <h1 className="text-xl font-bold text-gray-800">
+            AI Planner Assistant
+            {isConnected && (
+              <span className="ml-2 text-xs text-green-500">(Connected)</span>
+            )}
+          </h1>
+          <AgentSelector
+            selectedAgentId={selectedAgentId}
+            onAgentChange={setSelectedAgentId}
+          />
+        </div>
         <Button
           variant="outline"
           size="sm"
@@ -288,12 +310,12 @@ export default function PlannerPage() {
             value={input}
             onChange={handleInputChange}
             className="flex-1 border-gray-300 focus:border-blue-500 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
-            disabled={isLoading}
+            disabled={isLoading || !selectedAgentId}
           />
           <Button
             type="submit"
             className="bg-blue-500 hover:bg-blue-600 text-white"
-            disabled={isLoading || !input.trim()}
+            disabled={isLoading || !input.trim() || !selectedAgentId}
           >
             <Send className="h-4 w-4 mr-2" />
             Send

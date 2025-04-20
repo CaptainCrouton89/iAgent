@@ -19,7 +19,20 @@ type AgentResponse = {
   messageHistory: Message[];
 };
 
-export async function GET() {
+export async function GET(request: Request) {
+  // Get the agent ID from the request's URL
+  const { searchParams } = new URL(request.url);
+  const agentId = searchParams.get("agentId");
+
+  if (!agentId) {
+    return new Response(JSON.stringify({ error: "Agent ID is required" }), {
+      status: 400,
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+  }
+
   const encoder = new TextEncoder();
 
   // Create a TransformStream for handling the Server-Sent Events
@@ -53,7 +66,7 @@ export async function GET() {
       while (true) {
         try {
           const response = await axios.get(
-            "http://localhost:3800/api/agents/9ec76e34-9715-4310-89d0-d9663373b02a/messages"
+            `http://localhost:3800/api/agents/${agentId}/messages`
           );
 
           if (response.status === 200) {

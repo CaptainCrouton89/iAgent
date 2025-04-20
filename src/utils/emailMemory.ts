@@ -1,6 +1,6 @@
-import type { EmailData } from "../services/aiService";
-import { AIService } from "../services/aiService";
-import { MemoryService } from "../services/memoryService";
+import type { EmailData } from "../deprecated/aiService";
+import { AIService } from "../deprecated/aiService";
+import { MemoryService } from "../deprecated/memoryService";
 
 /**
  * Process an email and create a memory if it's deemed relevant

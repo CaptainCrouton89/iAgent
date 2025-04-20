@@ -5,8 +5,8 @@ export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
   try {
-    // Extract the message from request
-    const { message } = await request.json();
+    // Extract the message and agentId from the request body and validate
+    const { message, agentId } = await request.json();
 
     if (!message) {
       return NextResponse.json(
@@ -15,8 +15,15 @@ export async function POST(request: Request) {
       );
     }
 
+    if (!agentId) {
+      return NextResponse.json(
+        { error: "Agent ID is required" },
+        { status: 400 }
+      );
+    }
+
     const response = await axios.post(
-      "http://localhost:3800/api/agents/9ec76e34-9715-4310-89d0-d9663373b02a/chat",
+      `http://localhost:3800/api/agents/${agentId}/chat`,
       {
         message,
       }

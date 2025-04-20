@@ -16,6 +16,7 @@ export type Database = {
           created_at: string
           id: string
           metadata: Json | null
+          owner: string | null
           role: string
           updated_at: string
         }
@@ -25,6 +26,7 @@ export type Database = {
           created_at?: string
           id?: string
           metadata?: Json | null
+          owner?: string | null
           role: string
           updated_at?: string
         }
@@ -34,6 +36,7 @@ export type Database = {
           created_at?: string
           id?: string
           metadata?: Json | null
+          owner?: string | null
           role?: string
           updated_at?: string
         }
@@ -57,6 +60,7 @@ export type Database = {
           id: string
           is_active: boolean | null
           logs: string | null
+          owner: string | null
           title: string
           updated_at: string | null
         }
@@ -69,6 +73,7 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           logs?: string | null
+          owner?: string | null
           title: string
           updated_at?: string | null
         }
@@ -81,6 +86,7 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           logs?: string | null
+          owner?: string | null
           title?: string
           updated_at?: string | null
         }
@@ -94,46 +100,25 @@ export type Database = {
           },
         ]
       }
-      contacts: {
-        Row: {
-          created_at: string | null
-          email: string
-          id: string
-          last_contacted: string | null
-          name: string | null
-        }
-        Insert: {
-          created_at?: string | null
-          email: string
-          id?: string
-          last_contacted?: string | null
-          name?: string | null
-        }
-        Update: {
-          created_at?: string | null
-          email?: string
-          id?: string
-          last_contacted?: string | null
-          name?: string | null
-        }
-        Relationships: []
-      }
       contexts: {
         Row: {
           created_at: string | null
           id: string
+          owner: string | null
           text_data: string
           updated_at: string | null
         }
         Insert: {
           created_at?: string | null
           id?: string
+          owner?: string | null
           text_data: string
           updated_at?: string | null
         }
         Update: {
           created_at?: string | null
           id?: string
+          owner?: string | null
           text_data?: string
           updated_at?: string | null
         }
@@ -145,6 +130,7 @@ export type Database = {
           created_at: string | null
           description: string
           id: string
+          owner: string | null
           task_id: string
           updated_at: string | null
         }
@@ -153,6 +139,7 @@ export type Database = {
           created_at?: string | null
           description: string
           id?: string
+          owner?: string | null
           task_id: string
           updated_at?: string | null
         }
@@ -161,6 +148,7 @@ export type Database = {
           created_at?: string | null
           description?: string
           id?: string
+          owner?: string | null
           task_id?: string
           updated_at?: string | null
         }
@@ -181,36 +169,6 @@ export type Database = {
           },
         ]
       }
-      short_term_memory: {
-        Row: {
-          content: string
-          created_at: string
-          embedding: string | null
-          id: string
-          relevance_score: number
-          source: string
-          source_id: string | null
-        }
-        Insert: {
-          content: string
-          created_at?: string
-          embedding?: string | null
-          id?: string
-          relevance_score: number
-          source: string
-          source_id?: string | null
-        }
-        Update: {
-          content?: string
-          created_at?: string
-          embedding?: string | null
-          id?: string
-          relevance_score?: number
-          source?: string
-          source_id?: string | null
-        }
-        Relationships: []
-      }
       tasks: {
         Row: {
           context_id: string | null
@@ -219,6 +177,7 @@ export type Database = {
           id: string
           is_cursor: boolean | null
           logs: string | null
+          owner: string | null
           owner_id: string | null
           parent_id: string | null
           status: string | null
@@ -232,6 +191,7 @@ export type Database = {
           id?: string
           is_cursor?: boolean | null
           logs?: string | null
+          owner?: string | null
           owner_id?: string | null
           parent_id?: string | null
           status?: string | null
@@ -245,6 +205,7 @@ export type Database = {
           id?: string
           is_cursor?: boolean | null
           logs?: string | null
+          owner?: string | null
           owner_id?: string | null
           parent_id?: string | null
           status?: string | null

@@ -3,10 +3,21 @@ import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
-export async function DELETE() {
+export async function DELETE(request: Request) {
+  // Get the agent ID from the request's URL
+  const { searchParams } = new URL(request.url);
+  const agentId = searchParams.get("agentId");
+
+  if (!agentId) {
+    return NextResponse.json(
+      { error: "Agent ID is required" },
+      { status: 400 }
+    );
+  }
+
   try {
     const response = await axios.delete(
-      "http://localhost:3800/api/agents/9ec76e34-9715-4310-89d0-d9663373b02a/messages"
+      `http://localhost:3800/api/agents/${agentId}/messages`
     );
 
     if (response.status !== 200) {

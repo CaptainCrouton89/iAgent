@@ -4,7 +4,7 @@ import {
   AgentMessageService,
   Message,
   MessageRole,
-} from "../services/agentMessageService";
+} from "../deprecated/agentMessageService";
 
 export function useAgentMessages(agentId: string) {
   const [messages, setMessages] = useState<Message[]>([]);
