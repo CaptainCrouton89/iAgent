@@ -94,7 +94,10 @@ export async function GET() {
       }
     } catch (error) {
       console.error("Stream error:", error);
-      await writer.close();
+      // Check if the writer is not closed before attempting to close it
+      if (!writer.closed) {
+        await writer.close();
+      }
     }
   };
 
