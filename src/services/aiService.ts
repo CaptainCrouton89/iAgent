@@ -1,3 +1,4 @@
+import { AgentHyveClient } from "@/tools/agent-hyve";
 import { openai } from "@ai-sdk/openai";
 import { generateText, streamText, type Message } from "ai";
 import { getSystemPrompt } from "../prompts/email.prompt";
@@ -9,6 +10,7 @@ import { MemoryService } from "./memoryService";
 interface AIServiceOptions {
   debug?: boolean;
   perplexityApiKey?: string;
+  agentHyveApiKey?: string;
   logLevel?: "none" | "minimal" | "detailed";
 }
 
@@ -32,14 +34,16 @@ export class AIService {
   private perplexityClient: PerplexityClient;
   private memoryService?: MemoryService;
   private contactsService?: ContactsService;
-
+  private agentHyveClient: AgentHyveClient;
   constructor(options: AIServiceOptions = {}) {
     this.debug = options.debug || false;
     this.logLevel = options.logLevel || (this.debug ? "detailed" : "minimal");
     this.perplexityClient = new PerplexityClient({
       apiKey: options.perplexityApiKey,
     });
-
+    this.agentHyveClient = new AgentHyveClient({
+      apiKey: options.agentHyveApiKey,
+    });
     if (this.logLevel !== "none") {
       console.log(`AIService initialized with log level: ${this.logLevel}`);
     }
@@ -186,6 +190,7 @@ ${recentMemories
         tools: {
           search: this.perplexityClient.searchTool,
           searchWithDateRange: this.perplexityClient.searchWithDateRangeTool,
+          helloWorldTool: this.agentHyveClient.helloWorldTool,
         },
 
         maxSteps: 5, // Allow multiple steps for tool usage

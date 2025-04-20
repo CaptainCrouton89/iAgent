@@ -3,7 +3,7 @@ import { ContactsService } from "@/services/contactsService";
 import { MemoryService } from "@/services/memoryService";
 import { SupabaseService } from "@/services/supabaseService";
 import { openai } from "@ai-sdk/openai";
-import { streamText } from "ai";
+import { generateText } from "ai";
 import { PerplexityClient } from "../../../tools/perplexity";
 
 // Allow streaming responses up to 30 seconds
@@ -42,17 +42,13 @@ export async function POST(req: Request) {
     // Get the user's most recent message
     const userMessage = messages[messages.length - 1].content;
 
-    // Format previous messages for the AI model
-    const previousMessages = messages.slice(0, -1);
-
     console.log(`[Planner API] Setting up streaming response`);
 
     // Create a streaming response using Vercel AI SDK
-    const { textStream } = await streamText({
+    const result = await generateText({
       model: openai("gpt-4.1-2025-04-14"),
       system:
         "You are an AI Planner Assistant that helps users organize tasks, plan projects, and manage their time effectively. Provide clear, structured advice for planning and organization.",
-      messages: previousMessages,
       prompt: userMessage,
       tools: {
         search: perplexityClient.searchTool,
@@ -61,63 +57,7 @@ export async function POST(req: Request) {
       maxSteps: 5,
     });
 
-    // Prepare for memory storage
-    const relevanceEvaluationPromise = aiService.evaluateMemoryRelevance({
-      source: "planner",
-      content: {
-        message: userMessage,
-      },
-    });
-
-    // Return the streaming response
-    console.log(`[Planner API] Returning streaming response to client`);
-
-    // Create a streaming response from the textStream
-    const encoder = new TextEncoder();
-    const stream = new ReadableStream({
-      async start(controller) {
-        for await (const chunk of textStream) {
-          controller.enqueue(encoder.encode(chunk));
-        }
-        controller.close();
-      },
-    });
-
-    // Store memory asynchronously without blocking the response
-    relevanceEvaluationPromise
-      .then(async (relevanceResult) => {
-        if (relevanceResult.relevance > 0.5) {
-          console.log(
-            `[Planner API] Storing message as memory with relevance ${relevanceResult.relevance}`
-          );
-
-          // Format conversation context
-          const historyText = previousMessages
-            .map(
-              (msg: { role: string; content: string }) =>
-                `${msg.role === "user" ? "User" : "Assistant"}: ${msg.content}`
-            )
-            .join("\n\n");
-
-          const contextualContent =
-            historyText.length > 0
-              ? `Context from planner conversation:\n${historyText}\n\nMessage: ${userMessage}`
-              : userMessage;
-
-          await memoryService.createMemory({
-            content: contextualContent,
-            source: "planner",
-            relevance_score: relevanceResult.relevance,
-            source_id: undefined,
-          });
-          console.log(`[Planner API] Memory stored successfully`);
-        }
-      })
-      .catch((error) => {
-        console.error("[Planner API] Error storing memory:", error);
-      });
-
-    return new Response(stream);
+    return new Response(result.text);
   } catch (error) {
     console.error("[Planner API] Error processing request:", error);
     return new Response(
