@@ -4,13 +4,16 @@ import { z } from "zod";
 
 interface AgentHyveOptions {
   apiKey?: string;
+  userId?: string;
 }
 
 export class AgentHyveClient {
   private apiKey: string;
+  private userId: string;
 
   constructor(options: AgentHyveOptions = {}) {
     this.apiKey = options.apiKey || "";
+    this.userId = options.userId || "";
 
     if (!this.apiKey) {
       console.warn(
@@ -24,12 +27,20 @@ export class AgentHyveClient {
       name: z.string().describe("The name to say hello to"),
     }),
     execute: async ({ name }: { name: string }) => {
-      const response = await axios.post("http://localhost:3800/api/jobs", {
-        toolName: "helloWorld",
-        args: {
-          name,
+      const response = await axios.post(
+        "http://localhost:3800/api/jobs",
+        {
+          toolName: "helloWorld",
+          args: {
+            name,
+          },
         },
-      });
+        {
+          headers: {
+            "x-user-id": this.userId,
+          },
+        }
+      );
       return response.data;
     },
   });

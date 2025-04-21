@@ -1,3 +1,4 @@
+import { createClient } from "@/utils/supabase/server";
 import axios from "axios";
 import { NextResponse } from "next/server";
 
@@ -33,6 +34,11 @@ export async function GET(request: Request) {
     });
   }
 
+  // Get user ID from auth session
+  const supabase = await createClient();
+  const { data: userData } = await supabase.auth.getUser();
+  const userId = userData.user?.id || "";
+
   const encoder = new TextEncoder();
 
   // Create a TransformStream for handling the Server-Sent Events
@@ -66,7 +72,12 @@ export async function GET(request: Request) {
       while (true) {
         try {
           const response = await axios.get(
-            `http://localhost:3800/api/agents/${agentId}/messages`
+            `http://localhost:3800/api/agents/${agentId}/messages`,
+            {
+              headers: {
+                "x-user-id": userId,
+              },
+            }
           );
 
           if (response.status === 200) {
