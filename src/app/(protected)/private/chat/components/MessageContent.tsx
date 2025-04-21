@@ -43,7 +43,15 @@ const ToolResultContent = ({
       Tool Result: {toolName}
     </div>
     <pre className="text-xs bg-white text-gray-800 p-3 m-0 overflow-x-auto border-t border-gray-200">
-      {JSON.stringify(result, null, 2)}
+      {result.type === "json" ? (
+        <pre className="text-xs bg-white text-gray-800 p-3 m-0 overflow-x-auto border-t border-gray-200">
+          {JSON.stringify(result, null, 2)}
+        </pre>
+      ) : (
+        <div className="p-3 text-sm text-gray-800 border-t border-gray-200 bg-gray-50">
+          <Markdown>{result.data as string}</Markdown>
+        </div>
+      )}
     </pre>
   </div>
 );

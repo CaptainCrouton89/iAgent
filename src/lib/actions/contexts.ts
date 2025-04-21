@@ -48,9 +48,13 @@ export async function createContext(
   // Get current user
   const { data: userData } = await supabaseClient.auth.getUser();
 
+  if (!userData.user) {
+    throw new Error("User not found");
+  }
+
   const newContext: ContextInsert = {
     id: uuidv4(),
-    owner: userData.user?.id || null,
+    owner: userData.user.id,
     text_data: textData,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),

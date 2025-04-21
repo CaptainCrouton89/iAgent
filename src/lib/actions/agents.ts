@@ -80,10 +80,14 @@ export async function createAgent(
   // Get current user
   const { data: userData } = await supabaseClient.auth.getUser();
 
+  if (!userData.user) {
+    throw new Error("User not found");
+  }
+
   const newAgent: AgentInsert = {
     ...agent,
     id: uuidv4(),
-    owner: userData.user?.id || null,
+    owner: userData.user.id,
     is_active: true,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
@@ -138,17 +142,6 @@ export async function deleteAgent(id: string, supabaseClient: SupabaseClient) {
   if (tasksError) {
     console.error("Error deleting agent tasks:", tasksError);
     throw new Error("Failed to delete agent tasks");
-  }
-
-  // Then delete all associated messages
-  const { error: messagesError } = await supabaseClient
-    .from("agent_message_history")
-    .delete()
-    .eq("agent_id", id);
-
-  if (messagesError) {
-    console.error("Error deleting agent messages:", messagesError);
-    throw new Error("Failed to delete agent messages");
   }
 
   // Finally delete the agent

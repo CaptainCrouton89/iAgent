@@ -1,8 +1,9 @@
 export type ToolArgs = Record<string, string | number | boolean | null>;
 
 export type ToolResult = {
-  message?: string;
-  toolCallId?: string;
+  success: boolean;
+  data: string | object;
+  type: "json" | "markdown";
   [key: string]: unknown;
 };
 
