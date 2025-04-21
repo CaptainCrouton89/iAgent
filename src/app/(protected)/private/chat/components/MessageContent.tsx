@@ -10,6 +10,7 @@ import {
 import {
   containsMultipleJsonObjects,
   extractJsonObjects,
+  parseJsonArray,
 } from "../utils/helpers";
 
 // Component to render tool call content
@@ -42,23 +43,23 @@ const ToolResultContent = ({
     <div className="bg-green-50 px-3 py-2 border-l-2 border-l-green-500 font-medium text-sm text-green-700">
       Tool Result: {toolName}
     </div>
-    <pre className="text-xs bg-white text-gray-800 p-3 m-0 overflow-x-auto border-t border-gray-200">
-      {result.type === "json" ? (
-        <pre className="text-xs bg-white text-gray-800 p-3 m-0 overflow-x-auto border-t border-gray-200">
-          {JSON.stringify(result, null, 2)}
-        </pre>
-      ) : (
-        <div className="p-3 text-sm text-gray-800 border-t border-gray-200 bg-gray-50">
+    {result.type === "json" ? (
+      <pre className="text-xs bg-white text-gray-800 p-3 m-0 overflow-x-auto border-t border-gray-200">
+        {JSON.stringify(result.data, null, 2)}
+      </pre>
+    ) : (
+      <div className="p-3 text-sm border-t border-gray-200 bg-gray-50">
+        <div className="markdown-content">
           <Markdown>{result.data as string}</Markdown>
         </div>
-      )}
-    </pre>
+      </div>
+    )}
   </div>
 );
 
 // Component to render JSON tool response
 const JsonToolResponse = ({ jsonData }: { jsonData: JsonToolResponseType }) => (
-  <div className="border border-gray-200 rounded-md overflow-hidden">
+  <div className="border border-gray-200 rounded-md overflow-hidden mb-3">
     <div className="bg-green-50 px-3 py-2 border-l-2 border-l-green-500 font-medium text-sm text-green-700 flex justify-between items-center">
       <span>Tool Result: {jsonData.toolName}</span>
       <span className="text-xs text-gray-500">ID: {jsonData.toolCallId}</span>
@@ -90,17 +91,29 @@ const JsonToolResponse = ({ jsonData }: { jsonData: JsonToolResponseType }) => (
       )}
     </div>
 
-    {jsonData.data?.text && (
-      <div className="p-3 text-sm text-gray-800 border-t border-gray-200 bg-gray-50">
-        <Markdown>{jsonData.data.text}</Markdown>
+    {typeof jsonData.data === "string" ? (
+      <div className="p-3 border-t border-gray-200 bg-gray-50">
+        <div className="markdown-content">
+          <Markdown>{jsonData.data}</Markdown>
+        </div>
       </div>
-    )}
+    ) : jsonData.data?.text ? (
+      <div className="p-3 border-t border-gray-200 bg-gray-50">
+        <div className="markdown-content">
+          <Markdown>{jsonData.data.text}</Markdown>
+        </div>
+      </div>
+    ) : jsonData.data && typeof jsonData.data === "object" ? (
+      <pre className="text-xs bg-white text-gray-800 p-3 m-0 overflow-x-auto border-t border-gray-200">
+        {JSON.stringify(jsonData.data, null, 2)}
+      </pre>
+    ) : null}
   </div>
 );
 
 // Component to render text content
 const TextContent = ({ text }: { text: string }) => (
-  <div className="markdown-content text-gray-800">
+  <div className="markdown-content">
     <Markdown>{text}</Markdown>
   </div>
 );
@@ -111,43 +124,19 @@ const MultipleJsonToolResponses = ({
 }: {
   jsonDataList: JsonToolResponseType[];
 }) => (
-  <div className="space-y-3">
+  <div className="space-y-2">
     {jsonDataList.map((jsonData, index) => (
       <JsonToolResponse key={index} jsonData={jsonData} />
     ))}
   </div>
 );
 
-// Parse JSON array string into array of JsonToolResponseType
-const parseJsonArray = (content: string): JsonToolResponseType[] => {
-  try {
-    const trimmedContent = content.trim();
-    if (trimmedContent.startsWith("[") && trimmedContent.endsWith("]")) {
-      const parsedArray = JSON.parse(trimmedContent);
-      if (Array.isArray(parsedArray)) {
-        return parsedArray.filter(
-          (item) =>
-            item &&
-            typeof item === "object" &&
-            "toolName" in item &&
-            "toolCallId" in item &&
-            "data" in item
-        );
-      }
-    }
-    return [];
-  } catch (e) {
-    console.error("Error parsing JSON array:", e);
-    return [];
-  }
-};
-
 export function MessageContent({ message }: { message: Message }): ReactNode {
   // Handle string content
   if (typeof message.content === "string") {
     const trimmedContent = message.content.trim();
 
-    // Check if the content is a JSON array
+    // Check if the content is a JSON array of tool responses
     if (trimmedContent.startsWith("[") && trimmedContent.endsWith("]")) {
       const jsonResponses = parseJsonArray(trimmedContent);
       if (jsonResponses.length > 0) {
@@ -159,7 +148,6 @@ export function MessageContent({ message }: { message: Message }): ReactNode {
     if (containsMultipleJsonObjects(trimmedContent)) {
       const jsonResponses = extractJsonObjects(trimmedContent);
       if (jsonResponses.length > 0) {
-        console.log("Rendering JSON tool responses:", jsonResponses.length);
         return <MultipleJsonToolResponses jsonDataList={jsonResponses} />;
       }
     }

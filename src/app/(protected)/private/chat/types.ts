@@ -1,4 +1,7 @@
-export type ToolArgs = Record<string, string | number | boolean | null>;
+export type ToolArgs = Record<
+  string,
+  string | number | boolean | object | null
+>;
 
 export type ToolResult = {
   success: boolean;
@@ -18,14 +21,14 @@ export type ContentItem =
     };
 
 export type Message = {
-  id: string;
+  id?: string;
   role: "user" | "assistant" | "tool";
   content: string | ContentItem[];
 };
 
 export type JsonToolData = {
-  type: string;
-  text: string;
+  type?: string;
+  text?: string;
   timestamp?: string;
   [key: string]: unknown;
 };
@@ -34,6 +37,6 @@ export type JsonToolResponse = {
   success: boolean;
   toolName: string;
   toolCallId: string;
-  data: JsonToolData;
+  data: JsonToolData | string;
   [key: string]: unknown;
 };

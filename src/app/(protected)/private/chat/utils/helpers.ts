@@ -66,6 +66,32 @@ export const extractJsonObjects = (str: string): JsonToolResponseType[] => {
 };
 
 /**
+ * Parse a JSON array string into an array of JsonToolResponseType
+ */
+export const parseJsonArray = (content: string): JsonToolResponseType[] => {
+  try {
+    const trimmedContent = content.trim();
+    if (trimmedContent.startsWith("[") && trimmedContent.endsWith("]")) {
+      const parsedArray = JSON.parse(trimmedContent);
+      if (Array.isArray(parsedArray)) {
+        return parsedArray.filter(
+          (item) =>
+            item &&
+            typeof item === "object" &&
+            "toolName" in item &&
+            "toolCallId" in item &&
+            "data" in item
+        );
+      }
+    }
+    return [];
+  } catch (e) {
+    console.error("Error parsing JSON array:", e);
+    return [];
+  }
+};
+
+/**
  * Normalize a string that might have "data:" prefix (from EventSource)
  */
 export const normalizeEventData = (str: string): string => {
@@ -101,6 +127,12 @@ export const extractToolResponsesFromMessagesArray = (
           const jsonResponses = extractJsonObjects(msgObj.content);
           if (jsonResponses.length > 0) {
             return jsonResponses;
+          }
+
+          // Try to parse as a JSON array
+          const arrayResponses = parseJsonArray(msgObj.content);
+          if (arrayResponses.length > 0) {
+            return arrayResponses;
           }
         }
       }
@@ -149,23 +181,9 @@ export const isDisplayedAsAssistant = (message: Message): boolean => {
 
     // Check if content is a JSON array
     if (content.startsWith("[") && content.endsWith("]")) {
-      try {
-        const parsedArray = JSON.parse(content);
-        if (Array.isArray(parsedArray) && parsedArray.length > 0) {
-          // Check if the array contains valid tool responses
-          return parsedArray.some(
-            (item) =>
-              item &&
-              typeof item === "object" &&
-              "toolName" in item &&
-              "toolCallId" in item &&
-              "data" in item &&
-              (typeof item.success === "boolean" || "success" in item)
-          );
-        }
-      } catch (e) {
-        // If parsing fails, continue with other checks
-        console.error("Error parsing potential JSON array:", e);
+      const jsonResponses = parseJsonArray(content);
+      if (jsonResponses.length > 0) {
+        return true;
       }
     }
 

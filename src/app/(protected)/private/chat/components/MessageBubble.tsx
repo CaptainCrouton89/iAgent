@@ -3,6 +3,7 @@ import { Message } from "../types";
 import {
   containsMultipleJsonObjects,
   extractJsonObjects,
+  parseJsonArray,
 } from "../utils/helpers";
 import { MessageContent } from "./MessageContent";
 
@@ -10,30 +11,6 @@ interface MessageBubbleProps {
   message: Message;
   isAssistant: boolean;
 }
-
-// Helper to check if a string is a JSON array of tool responses
-const isJsonToolResponseArray = (content: string): boolean => {
-  try {
-    const trimmedContent = content.trim();
-    if (trimmedContent.startsWith("[") && trimmedContent.endsWith("]")) {
-      const parsed = JSON.parse(trimmedContent);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed.some(
-          (item) =>
-            item &&
-            typeof item === "object" &&
-            "toolName" in item &&
-            "toolCallId" in item &&
-            "data" in item
-        );
-      }
-    }
-    return false;
-  } catch {
-    // Ignore parsing errors
-    return false;
-  }
-};
 
 export function MessageBubble({ message, isAssistant }: MessageBubbleProps) {
   // Check if this message contains JSON tool responses directly
@@ -43,7 +20,7 @@ export function MessageBubble({ message, isAssistant }: MessageBubbleProps) {
     const trimmedContent = message.content.trim();
 
     // Check for JSON array of tool responses
-    if (isJsonToolResponseArray(trimmedContent)) {
+    if (parseJsonArray(trimmedContent).length > 0) {
       hasJsonToolResponses = true;
     }
     // Check for embedded JSON tool responses
@@ -53,10 +30,16 @@ export function MessageBubble({ message, isAssistant }: MessageBubbleProps) {
     ) {
       hasJsonToolResponses = true;
     }
+  } else if (Array.isArray(message.content)) {
+    // Check for tool-result items in the array
+    hasJsonToolResponses = message.content.some(
+      (item) => item.type === "tool-result"
+    );
   }
 
   // Use either the passed isAssistant prop or check for JSON tool responses
-  const shouldDisplayAsAssistant = isAssistant || hasJsonToolResponses;
+  const shouldDisplayAsAssistant =
+    isAssistant || hasJsonToolResponses || message.role === "tool";
 
   return (
     <div
