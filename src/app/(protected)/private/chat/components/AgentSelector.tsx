@@ -24,7 +24,7 @@ import { getAgents, type Agent } from "@/lib/actions/agents";
 import { createClient } from "@/utils/supabase/client";
 import { Loader2, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 interface AgentSelectorProps {
   selectedAgentId: string;
@@ -43,7 +43,7 @@ export function AgentSelector({
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const router = useRouter();
 
-  const fetchAgents = async () => {
+  const fetchAgents = useCallback(async () => {
     try {
       const supabase = createClient();
       const agentList = await getAgents(supabase);
@@ -65,7 +65,7 @@ export function AgentSelector({
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [selectedAgentId, onAgentChange]);
 
   // Initial fetch and setup polling
   useEffect(() => {
@@ -81,7 +81,7 @@ export function AgentSelector({
         clearInterval(pollingIntervalRef.current);
       }
     };
-  }, [selectedAgentId, onAgentChange]);
+  }, [selectedAgentId, onAgentChange, fetchAgents]);
 
   const handleDeleteAgent = async (agentId: string) => {
     try {

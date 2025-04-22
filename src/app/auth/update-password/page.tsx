@@ -2,19 +2,21 @@ import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { updatePassword } from "../reset-password/actions";
 
-export default function UpdatePasswordPage({
+export default async function UpdatePasswordPage({
   searchParams,
 }: {
-  searchParams: { error?: string };
+  searchParams: Promise<{ error?: string }>;
 }) {
+  const { error } = await searchParams;
+
   return (
     <div className="flex min-h-screen flex-col items-center justify-center p-24">
       <div className="bg-white p-8 rounded-lg shadow-md w-96 max-w-full">
         <h1 className="text-2xl font-bold mb-6">Update Password</h1>
 
-        {searchParams.error && (
+        {error && (
           <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-md">
-            {searchParams.error}
+            {error}
           </div>
         )}
 

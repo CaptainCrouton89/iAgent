@@ -76,7 +76,7 @@ export default function PlannerPage() {
 
               // Check if the content is a JSON array of tool responses
               if (parseJsonArray(trimmedContent).length > 0) {
-                console.log("Found JSON array tool responses");
+                // console.log("Found JSON array tool responses");
                 // We don't modify the original message but the MessageBubble component
                 // will use isDisplayedAsAssistant to determine how to display it
               }

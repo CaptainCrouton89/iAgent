@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Json } from "../../supabase/database.types";
 import {
   AgentMessageService,
@@ -11,14 +11,15 @@ export function useAgentMessages(agentId: string) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const messageService = new AgentMessageService();
+  const messageServiceRef = useRef(new AgentMessageService());
 
   // Load initial messages
   useEffect(() => {
     const loadMessages = async () => {
       setLoading(true);
       try {
-        const messageHistory = await messageService.getMessageHistory(agentId);
+        const messageHistory =
+          await messageServiceRef.current.getMessageHistory(agentId);
         setMessages(messageHistory);
         setError(null);
       } catch (err) {
@@ -36,7 +37,7 @@ export function useAgentMessages(agentId: string) {
   const addMessage = useCallback(
     async (role: MessageRole, content: string, metadata?: Json) => {
       try {
-        const newMessage = await messageService.addMessage({
+        const newMessage = await messageServiceRef.current.addMessage({
           agent_id: agentId,
           role,
           content,
@@ -60,7 +61,9 @@ export function useAgentMessages(agentId: string) {
   // Clear message history
   const clearHistory = useCallback(async () => {
     try {
-      const success = await messageService.clearAgentHistory(agentId);
+      const success = await messageServiceRef.current.clearAgentHistory(
+        agentId
+      );
       if (success) {
         setMessages([]);
         return true;
@@ -76,7 +79,7 @@ export function useAgentMessages(agentId: string) {
   // Delete a specific message
   const deleteMessage = useCallback(async (messageId: string) => {
     try {
-      const success = await messageService.deleteMessage(messageId);
+      const success = await messageServiceRef.current.deleteMessage(messageId);
       if (success) {
         setMessages((prev) => prev.filter((msg) => msg.id !== messageId));
         return true;

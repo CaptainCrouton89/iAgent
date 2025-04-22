@@ -5,22 +5,24 @@ import { resetPassword } from "./actions";
 export default async function ResetPasswordPage({
   searchParams,
 }: {
-  searchParams: { error?: string; message?: string };
+  searchParams: Promise<{ error?: string; message?: string }>;
 }) {
+  const { error, message } = await searchParams;
+
   return (
     <div className="flex min-h-screen flex-col items-center justify-center p-24">
       <div className="bg-white p-8 rounded-lg shadow-md w-96 max-w-full">
         <h1 className="text-2xl font-bold mb-6">Reset Password</h1>
 
-        {searchParams.error && (
+        {error && (
           <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-md">
-            {searchParams.error}
+            {error}
           </div>
         )}
 
-        {searchParams.message && (
+        {message && (
           <div className="mb-4 p-3 bg-green-100 text-green-700 rounded-md">
-            {searchParams.message}
+            {message}
           </div>
         )}
 
