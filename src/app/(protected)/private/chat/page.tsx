@@ -3,7 +3,8 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Send, Trash2 } from "lucide-react";
+import { Send, Settings, Trash2 } from "lucide-react";
+import Link from "next/link";
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { AgentSelector } from "./components/AgentSelector";
 import { MessageBubble } from "./components/MessageBubble";
@@ -220,16 +221,28 @@ export default function PlannerPage() {
             onAgentChange={setSelectedAgentId}
           />
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleClearHistory}
-          disabled={isClearing || messages.length === 0}
-          className="flex items-center gap-1 text-gray-600 border-gray-300 hover:bg-gray-100"
-        >
-          <Trash2 className="h-4 w-4" />
-          Clear History
-        </Button>
+        <div className="flex gap-2">
+          <Link href="/private/configure-agents">
+            <Button
+              variant="outline"
+              size="sm"
+              className="flex items-center gap-1 text-gray-600 border-gray-300 hover:bg-gray-100"
+            >
+              <Settings className="h-4 w-4" />
+              Configure Agents
+            </Button>
+          </Link>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleClearHistory}
+            disabled={isClearing || messages.length === 0}
+            className="flex items-center gap-1 text-gray-600 border-gray-300 hover:bg-gray-100"
+          >
+            <Trash2 className="h-4 w-4" />
+            Clear History
+          </Button>
+        </div>
       </div>
 
       <div className="flex-1 p-6 overflow-y-auto bg-gray-50">
