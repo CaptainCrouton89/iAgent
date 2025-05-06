@@ -13,6 +13,7 @@ export type Database = {
         Row: {
           agent_type: string
           background: string | null
+          boss_id: string | null
           created_at: string | null
           goal: string
           id: string
@@ -25,6 +26,7 @@ export type Database = {
         Insert: {
           agent_type: string
           background?: string | null
+          boss_id?: string | null
           created_at?: string | null
           goal: string
           id?: string
@@ -37,6 +39,7 @@ export type Database = {
         Update: {
           agent_type?: string
           background?: string | null
+          boss_id?: string | null
           created_at?: string | null
           goal?: string
           id?: string
@@ -46,7 +49,15 @@ export type Database = {
           title?: string
           updated_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "agents_boss_id_fkey"
+            columns: ["boss_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       contexts: {
         Row: {
@@ -69,6 +80,137 @@ export type Database = {
           owner?: string
           text_data?: string
           updated_at?: string | null
+        }
+        Relationships: []
+      }
+      custom_tool_executions: {
+        Row: {
+          agent_id: string | null
+          created_at: string
+          error_message: string | null
+          execution_time_ms: number | null
+          id: string
+          implementation_id: string
+          input_args: Json
+          output_result: Json | null
+          success: boolean | null
+          tool_id: string
+        }
+        Insert: {
+          agent_id?: string | null
+          created_at?: string
+          error_message?: string | null
+          execution_time_ms?: number | null
+          id?: string
+          implementation_id: string
+          input_args?: Json
+          output_result?: Json | null
+          success?: boolean | null
+          tool_id: string
+        }
+        Update: {
+          agent_id?: string | null
+          created_at?: string
+          error_message?: string | null
+          execution_time_ms?: number | null
+          id?: string
+          implementation_id?: string
+          input_args?: Json
+          output_result?: Json | null
+          success?: boolean | null
+          tool_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "custom_tool_executions_implementation_id_fkey"
+            columns: ["implementation_id"]
+            isOneToOne: false
+            referencedRelation: "custom_tool_implementations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "custom_tool_executions_tool_id_fkey"
+            columns: ["tool_id"]
+            isOneToOne: false
+            referencedRelation: "custom_tools"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      custom_tool_implementations: {
+        Row: {
+          created_at: string
+          execute_code: string
+          id: string
+          is_current_version: boolean
+          sync_tool_code: string | null
+          tool_id: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          created_at?: string
+          execute_code: string
+          id?: string
+          is_current_version?: boolean
+          sync_tool_code?: string | null
+          tool_id: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          created_at?: string
+          execute_code?: string
+          id?: string
+          is_current_version?: boolean
+          sync_tool_code?: string | null
+          tool_id?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "custom_tool_implementations_tool_id_fkey"
+            columns: ["tool_id"]
+            isOneToOne: false
+            referencedRelation: "custom_tools"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      custom_tools: {
+        Row: {
+          created_at: string
+          description: string
+          id: string
+          input_schema: Json
+          is_active: boolean
+          is_async: boolean
+          name: string
+          owner: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description: string
+          id?: string
+          input_schema?: Json
+          is_active?: boolean
+          is_async?: boolean
+          name: string
+          owner: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string
+          id?: string
+          input_schema?: Json
+          is_active?: boolean
+          is_async?: boolean
+          name?: string
+          owner?: string
+          updated_at?: string
         }
         Relationships: []
       }

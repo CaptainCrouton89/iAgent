@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Json } from "../../supabase/database.types";
+import { Json } from "../../../supabase/database.types";
 import {
   AgentMessageService,
   Message,

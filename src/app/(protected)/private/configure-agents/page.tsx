@@ -13,10 +13,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { Tables } from "@/utils/supabase/database.types";
 import { ArrowLeft, Edit, Save, Trash, X } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Tables } from "../../../../../supabase/database.types";
 
 type Agent = Tables<"agents">;
 
@@ -126,7 +126,7 @@ export default function ConfigureAgentsPage() {
   };
 
   return (
-    <div className="container mx-auto py-8">
+    <div className="container mx-auto py-8 px-4">
       <div className="flex items-center mb-6">
         <Link href="/private/chat">
           <Button variant="outline" size="sm" className="mr-4">
