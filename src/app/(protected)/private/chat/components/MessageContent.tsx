@@ -13,6 +13,11 @@ import {
   parseJsonArray,
 } from "../utils/helpers";
 
+// Simplest markdown options - disable HTML parsing completely
+const markdownOptions = {
+  disableParsingRawHTML: true, // This setting prevents React from trying to render HTML tags in markdown
+};
+
 // Component to render tool call content
 const ToolCallContent = ({
   toolName,
@@ -50,7 +55,7 @@ const ToolResultContent = ({
     ) : (
       <div className="p-3 text-sm border-t border-gray-200 bg-gray-50">
         <div className="markdown-content">
-          <Markdown>{result.data as string}</Markdown>
+          <Markdown options={markdownOptions}>{result.data as string}</Markdown>
         </div>
       </div>
     )}
@@ -94,13 +99,13 @@ const JsonToolResponse = ({ jsonData }: { jsonData: JsonToolResponseType }) => (
     {typeof jsonData.data === "string" ? (
       <div className="p-3 border-t border-gray-200 bg-gray-50">
         <div className="markdown-content">
-          <Markdown>{jsonData.data}</Markdown>
+          <Markdown options={markdownOptions}>{jsonData.data}</Markdown>
         </div>
       </div>
     ) : jsonData.data?.text ? (
       <div className="p-3 border-t border-gray-200 bg-gray-50">
         <div className="markdown-content">
-          <Markdown>{jsonData.data.text}</Markdown>
+          <Markdown options={markdownOptions}>{jsonData.data.text}</Markdown>
         </div>
       </div>
     ) : jsonData.data && typeof jsonData.data === "object" ? (
@@ -114,7 +119,7 @@ const JsonToolResponse = ({ jsonData }: { jsonData: JsonToolResponseType }) => (
 // Component to render text content
 const TextContent = ({ text }: { text: string }) => (
   <div className="markdown-content">
-    <Markdown>{text}</Markdown>
+    <Markdown options={markdownOptions}>{text}</Markdown>
   </div>
 );
 
