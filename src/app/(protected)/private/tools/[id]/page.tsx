@@ -26,9 +26,14 @@ import { Json } from "@/utils/supabase/database.types";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { use, useEffect, useState } from "react";
 
-export default function EditToolPage({ params }: { params: { id: string } }) {
+export default function EditToolPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = use(params);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [isAsync, setIsAsync] = useState(false);
@@ -45,10 +50,7 @@ export default function EditToolPage({ params }: { params: { id: string } }) {
   useEffect(() => {
     async function fetchToolData() {
       try {
-        const toolData = await getCustomToolWithImplementation(
-          params.id,
-          supabase
-        );
+        const toolData = await getCustomToolWithImplementation(id, supabase);
         if (toolData) {
           setName(toolData.tool.name);
           setDescription(toolData.tool.description);
@@ -66,7 +68,7 @@ export default function EditToolPage({ params }: { params: { id: string } }) {
     }
 
     fetchToolData();
-  }, [params.id]);
+  }, [id, supabase]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -105,7 +107,7 @@ export default function EditToolPage({ params }: { params: { id: string } }) {
       };
 
       // Update the tool
-      await updateCustomTool(params.id, formData, supabase);
+      await updateCustomTool(id, formData, supabase);
 
       // Redirect to the tools list
       router.push("/private/tools");

@@ -19,9 +19,14 @@ import { createClient } from "@/utils/supabase/client";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { use, useEffect, useState } from "react";
 
-export default function TestToolPage({ params }: { params: { id: string } }) {
+export default function TestToolPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = use(params);
   const [toolData, setToolData] = useState<CustomToolWithImplementation | null>(
     null
   );
@@ -37,7 +42,7 @@ export default function TestToolPage({ params }: { params: { id: string } }) {
   useEffect(() => {
     async function fetchToolData() {
       try {
-        const data = await getCustomToolWithImplementation(params.id, supabase);
+        const data = await getCustomToolWithImplementation(id, supabase);
         setToolData(data);
 
         // Initialize input args with example values from schema
@@ -91,7 +96,7 @@ export default function TestToolPage({ params }: { params: { id: string } }) {
     }
 
     fetchToolData();
-  }, [params.id]);
+  }, [id, supabase]);
 
   const handleExecute = async () => {
     setIsExecuting(true);
@@ -109,7 +114,7 @@ export default function TestToolPage({ params }: { params: { id: string } }) {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          tool_id: params.id,
+          tool_id: id,
           args,
         }),
       });

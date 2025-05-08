@@ -38,7 +38,7 @@ export default function ToolsPage() {
     }
 
     fetchTools();
-  }, []);
+  }, [supabase]);
 
   // Toggle tool active status
   const toggleToolStatus = async (id: string, currentStatus: boolean) => {
