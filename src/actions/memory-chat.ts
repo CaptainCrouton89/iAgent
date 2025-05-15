@@ -23,8 +23,8 @@ export async function saveConversation(messages: Message[]) {
       throw new Error("User not authenticated");
     }
 
-    // Convert messages to a string for embedding
-    const rawContent = messages
+    // Create a string representation for embedding generation
+    const contentForEmbedding = messages
       .map(
         (msg) =>
           `${msg.role}: ${
@@ -44,14 +44,14 @@ export async function saveConversation(messages: Message[]) {
     // Generate embedding using OpenAI
     const embeddingResponse = await openai.embeddings.create({
       model: "text-embedding-ada-002",
-      input: rawContent.slice(0, 8000), // Limit to 8000 chars to avoid token limits
+      input: contentForEmbedding.slice(0, 8000), // Limit to 8000 chars to avoid token limits
     });
 
     const embedding = embeddingResponse.data[0].embedding;
 
-    // Save to Supabase
+    // Save to Supabase with the full messages structure
     const { error } = await supabase.from("memories").insert({
-      content: rawContent,
+      content: messages, // Store the entire messages array as JSONB
       embedding,
     });
 
