@@ -36,11 +36,15 @@ Focus on:
 - Topics or styles that led to positive engagement or, conversely, frustration/confusion.
 - Key takeaways about what this user values in conversation (e.g., being remembered, efficiency, empathy, humor).
 
-The output 'lessons_description' should be a concise directive or observation **phrased in the second person, as if you are directly advising the conversational AI.** For example: "You should offer more concrete examples when explaining complex topics to this user," or "When the user expresses frustration, you could try a more empathetic tone."
+The output 'lessons_description' should be a **very concise, direct, and actionable instruction for the AI, phrased in the second person and starting with a verb (imperative mood).**
+For example:
+- "Offer more concrete examples when explaining complex topics to this user."
+- "Try a more empathetic tone when the user expresses frustration."
+- "Avoid pitying or patronizing the user; maintain respectful, neutral tone."
 
-Output ONLY whether a lesson was learned, the lesson description (in the second person), and its importance score.
+Output ONLY whether a lesson was learned, the lesson description (following the specified format), and its importance score.
 - If no specific, actionable lesson is identified that would significantly improve future interactions, set lessons_learned to false.
-- If a lesson is identified, describe it as an actionable insight for an AI (in the second person) and provide an importance score. Higher scores for lessons that are critical for maintaining good rapport or achieving the user's conversational goals.`;
+- If a lesson is identified, describe it as an actionable insight for an AI and provide an importance score. Higher scores for lessons that are critical for maintaining good rapport or achieving the user's conversational goals.`;
 
 export async function POST(req: Request) {
   try {
