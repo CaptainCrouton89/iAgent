@@ -29,16 +29,16 @@ export default function MemoryChatPage() {
   });
 
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)] w-full p-4">
-      <Card className="flex-1 flex flex-col mx-auto w-full max-w-6xl">
-        <CardHeader className="flex flex-row items-center justify-between">
+    <div className="flex flex-col h-[calc(100vh-4rem)] bg-gray-50 container mx-auto">
+      <Card className="flex-1 flex flex-col overflow-hidden">
+        <CardHeader className="flex flex-row items-center justify-between border-b p-4">
           <CardTitle>Memory Chat</CardTitle>
           <SaveConversationButton messages={messages} />
         </CardHeader>
-        <CardContent className="flex-1 p-0 overflow-hidden">
+        <CardContent className="flex-1 p-6 overflow-y-auto bg-gray-50">
           <ChatContainer messages={messages} isLoading={status !== "ready"} />
         </CardContent>
-        <CardFooter>
+        <CardFooter className="p-4 border-t">
           <ChatInput
             input={input}
             isReady={status === "ready"}

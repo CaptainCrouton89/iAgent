@@ -10,6 +10,7 @@ const openai = new OpenAI({
 export interface MemorySearchResult {
   id: string;
   content: Message[]; // This will be the full message array in JSON format
+  compressed_conversation: { role: string; content: string }[] | null;
   context: string | null;
   created_at: string;
   similarity: number;

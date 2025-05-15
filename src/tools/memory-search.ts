@@ -33,31 +33,27 @@ export const memorySearchTool = tool({
 
       return memories
         .map((memory, index) => {
-          // Format the content - since we're storing messages as a complete array
-          const messageContent = Array.isArray(memory.content)
-            ? memory.content
-                .map(
-                  (msg) =>
-                    `${msg.role}: ${
-                      msg.parts
-                        ?.map((part) =>
-                          part.type === "text"
-                            ? part.text
-                            : `[Tool: ${part.type}]`
-                        )
-                        .join(" ") || ""
-                    }`
-                )
-                .join("\n")
-            : JSON.stringify(memory.content);
+          let messageContent = "[Compressed content not available or invalid]"; // Default message
+          if (
+            Array.isArray(memory.compressed_conversation) &&
+            memory.compressed_conversation.length > 0
+          ) {
+            messageContent = memory.compressed_conversation
+              .map(
+                (compressedMsg: { role: string; content: string }) =>
+                  `${compressedMsg.role}: ${compressedMsg.content}`
+              )
+              .join("\\n");
+          }
+          // Fallbacks to memory.content are removed as per user request
 
           return `Memory ${index + 1} (${new Date(
             memory.created_at
           ).toLocaleString()}) - Relevance: ${Math.round(
             memory.similarity * 100
-          )}%:\n${messageContent}\n`;
+          )}%:\\n${messageContent}\\n`;
         })
-        .join("\n---\n");
+        .join("\\n---\\n");
     } catch (error) {
       console.error("Error searching memories:", error);
       return "Error searching memories. Please try again.";

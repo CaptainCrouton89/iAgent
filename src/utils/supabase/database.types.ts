@@ -124,6 +124,7 @@ export type Database = {
       memories: {
         Row: {
           auth_id: string
+          compressed_conversation: Json
           content: Json
           context: string | null
           created_at: string
@@ -132,6 +133,7 @@ export type Database = {
         }
         Insert: {
           auth_id?: string
+          compressed_conversation?: Json
           content?: Json
           context?: string | null
           created_at?: string
@@ -140,6 +142,7 @@ export type Database = {
         }
         Update: {
           auth_id?: string
+          compressed_conversation?: Json
           content?: Json
           context?: string | null
           created_at?: string
@@ -380,6 +383,21 @@ export type Database = {
           source: string
           source_id: string
           relevance_score: number
+          created_at: string
+          similarity: number
+        }[]
+      }
+      search_memories: {
+        Args: {
+          query_embedding: string
+          match_threshold?: number
+          match_count?: number
+        }
+        Returns: {
+          id: string
+          content: Json
+          compressed_conversation: Json
+          context: string
           created_at: string
           similarity: number
         }[]

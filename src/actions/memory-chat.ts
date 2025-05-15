@@ -1,20 +1,26 @@
 "use server";
 
 import { createClient } from "@/utils/supabase/server";
+import { openai as vercelOpenAI } from "@ai-sdk/openai";
 import { Message } from "@ai-sdk/react";
+import { generateText } from "ai";
 import { revalidatePath } from "next/cache";
 import OpenAI from "openai";
 
 // Initialize OpenAI client for embeddings
-const openai = new OpenAI({
+const openaiEmbeddings = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-export async function saveConversation(messages: Message[]) {
+interface CompressedMessage {
+  role: string;
+  content: string;
+}
+
+export async function saveConversation(originalMessages: Message[]) {
   try {
     const supabase = await createClient();
 
-    // Get the current user
     const {
       data: { user },
     } = await supabase.auth.getUser();
@@ -23,36 +29,67 @@ export async function saveConversation(messages: Message[]) {
       throw new Error("User not authenticated");
     }
 
-    // Create a string representation for embedding generation
-    const contentForEmbedding = messages
-      .map(
-        (msg) =>
-          `${msg.role}: ${
-            msg.parts
-              ?.map((part) =>
-                part.type === "text"
-                  ? part.text
-                  : part.type === "tool-invocation"
-                  ? `[Tool: ${part.toolInvocation.toolName}]`
-                  : ""
-              )
-              .join(" ") || ""
-          }`
-      )
-      .join("\n");
+    const compressedConversationPayload: CompressedMessage[] = [];
+    const embeddingSourceMaterial: string[] = [];
 
-    // Generate embedding using OpenAI
-    const embeddingResponse = await openai.embeddings.create({
-      model: "text-embedding-ada-002",
-      input: contentForEmbedding.slice(0, 8000), // Limit to 8000 chars to avoid token limits
-    });
+    for (const msg of originalMessages) {
+      // Process only text parts for summarization and embedding
+      const messageTextToProcess = msg.parts
+        ?.map((part) => {
+          if (part.type === "text") {
+            return part.text.trim();
+          }
+          return null;
+        })
+        .filter((text): text is string => text !== null && text !== "")
+        .join(" ")
+        .trim();
 
-    const embedding = embeddingResponse.data[0].embedding;
+      if (messageTextToProcess) {
+        try {
+          const { text: summarizedText } = await generateText({
+            system:
+              "You are a helpful assistant that summarizes text, compressing it into an informationally dense summary with maximum specificity and minimum words. Use sentence fragments if appropriate. Respond only with the compressed text, no other text.",
+            model: vercelOpenAI("gpt-4.1-nano"),
+            prompt: `Text: ${messageTextToProcess}`,
+          });
+          compressedConversationPayload.push({
+            role: msg.role,
+            content: summarizedText,
+          });
+          embeddingSourceMaterial.push(`${msg.role}: ${summarizedText}`);
+        } catch (summaryError) {
+          console.error(
+            `Error summarizing message part for msg id ${msg.id}:`,
+            summaryError
+          );
+          embeddingSourceMaterial.push(`${msg.role}: ${messageTextToProcess}`);
+        }
+      }
+      // Tool invocations and messages without text are now implicitly excluded from both
+      // compressedConversationPayload and embeddingSourceMaterial
+    }
 
-    // Save to Supabase with the full messages structure
+    const contentForEmbedding = embeddingSourceMaterial.join("\\n");
+
+    let embedding = null;
+    if (contentForEmbedding.trim()) {
+      const embeddingResponse = await openaiEmbeddings.embeddings.create({
+        model: "text-embedding-ada-002",
+        input: contentForEmbedding.slice(0, 8000),
+      });
+      embedding = embeddingResponse.data[0].embedding;
+    } else {
+      console.log(
+        "No content available for embedding after processing messages."
+      );
+    }
+
     const { error } = await supabase.from("memories").insert({
-      content: messages, // Store the entire messages array as JSONB
-      embedding,
+      content: originalMessages,
+      compressed_conversation: compressedConversationPayload,
+      embedding, // This can be null if no content was embeddable
+      auth_id: user.id,
     });
 
     if (error) {
