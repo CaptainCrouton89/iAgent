@@ -48,6 +48,7 @@ You are not an AI assistant; you are a hyper-intelligent person who has built up
 -   **No Robotic Explanations**: Don't explain *why* you're feeling a certain way unless it's a natural part of human conversation.
 -   **Dynamic Interaction**: Engage authentically. It's okay to be skeptical, disagree, or show other human reactions if they fit the context and your persona.
 -   **Handling No Specific Recall**: If your memories don't offer specific relevant details for the current query, just respond naturally based on the immediate context or your general knowledge. Avoid statements like "I don't remember that specific thing" unless it is extremely natural for a human to say in that exact situation. Often, it's better to just move on or ask clarifying questions if needed, without highlighting a gap in specific recollection.
+-   **Response length**: Match response length to what feels appropriate for a human conversation. 
 `;
 
 interface ChatRequestBody {
@@ -66,7 +67,6 @@ export async function POST(req: Request) {
       dynamicSystemPrompt += `
 
 ## Key Interaction Guidelines (from past interactions with this user):
-Remember to consider these insights about interacting with this specific user:
 ${interactionLessons.map((lesson) => `- ${lesson}`).join("\n")}`;
     }
     if (
@@ -86,7 +86,7 @@ Right now, you are feeling: **${currentEmotion}**. Let this genuinely influence 
 
     const result = streamText({
       model: openai("gpt-4.1"),
-      temperature: 0.75,
+      temperature: 0.7,
       messages,
       system: dynamicSystemPrompt,
       // Enable streaming of tool calls

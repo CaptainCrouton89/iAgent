@@ -1,4 +1,5 @@
 import { Message } from "@ai-sdk/react";
+import { useEffect, useRef } from "react";
 import { EditableMessage } from "./EditableMessage";
 
 interface ChatContainerProps {
@@ -14,8 +15,19 @@ export function ChatContainer({
   onEditMessage,
   currentEmotion,
 }: ChatContainerProps) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [messages]);
+
   return (
-    <div className="flex-1 overflow-auto space-y-4 min-h-[300px]">
+    <div
+      ref={scrollRef}
+      className="flex-1 overflow-auto space-y-4 min-h-[300px]"
+    >
       {messages.map((message) => (
         <EditableMessage
           key={message.id}
