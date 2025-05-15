@@ -1,11 +1,11 @@
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { FormEvent } from "react";
+import { Textarea } from "@/components/ui/textarea";
+import { FormEvent, KeyboardEvent } from "react";
 
 interface ChatInputProps {
   input: string;
   isReady: boolean;
-  onInputChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onInputChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
   onSubmit: (e: FormEvent<HTMLFormElement>) => void;
 }
 
@@ -15,14 +15,26 @@ export function ChatInput({
   onInputChange,
   onSubmit,
 }: ChatInputProps) {
+  const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey && input.trim()) {
+      e.preventDefault();
+      const form = e.currentTarget.form;
+      if (form) {
+        form.requestSubmit();
+      }
+    }
+  };
+
   return (
     <form onSubmit={onSubmit} className="flex w-full gap-2">
-      <Input
+      <Textarea
         value={input}
         onChange={onInputChange}
-        placeholder="Send a message..."
+        onKeyDown={handleKeyDown}
+        placeholder="Send a message... (Shift+Enter for new line)"
         disabled={!isReady}
-        className="flex-1"
+        className="flex-1 min-h-[44px] max-h-[200px] resize-y"
+        rows={1}
       />
       <Button type="submit" disabled={!isReady || !input.trim()}>
         Send

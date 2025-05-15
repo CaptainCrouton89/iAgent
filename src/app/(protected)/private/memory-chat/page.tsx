@@ -7,7 +7,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { useChat } from "@ai-sdk/react";
+import { Message, useChat } from "@ai-sdk/react";
 import { useEffect, useState } from "react";
 import { ChatContainer, ChatInput, SaveConversationButton } from "./components";
 
@@ -22,6 +22,8 @@ export default function MemoryChatPage() {
     handleInputChange,
     handleSubmit: originalHandleSubmit,
     status,
+    setMessages,
+    reload,
   } = useChat({
     api: "/api/memory-chat",
     maxSteps: 5,
@@ -34,6 +36,7 @@ export default function MemoryChatPage() {
   });
 
   const [interactionLessons, setInteractionLessons] = useState<string[]>([]);
+  const [currentEmotion, setCurrentEmotion] = useState<string>("Neutral");
 
   useEffect(() => {
     const fetchLessons = async () => {
@@ -61,12 +64,63 @@ export default function MemoryChatPage() {
     fetchLessons();
   }, []);
 
+  const handleEditMessage = async (messageId: string, newContent: string) => {
+    const messageIndex = messages.findIndex((msg) => msg.id === messageId);
+    if (messageIndex === -1) return;
+
+    // Construct the new list of messages: original messages up to the edited one,
+    // then the updated user message. This truncates any subsequent messages.
+    const messagesForReload: Message[] = [
+      ...messages.slice(0, messageIndex),
+      {
+        ...messages[messageIndex],
+        content: newContent,
+        parts: [{ type: "text" as const, text: newContent }],
+      },
+    ];
+
+    // Update the local messages state immediately to show the edit
+    setMessages(messagesForReload);
+
+    // Fetch current emotion state
+    let newEmotion = "Neutral";
+    try {
+      const emotionResponse = await fetch("/api/ai/emotion", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: messagesForReload }), // Use the updated messages for emotion detection
+      });
+
+      if (emotionResponse.ok) {
+        const data = await emotionResponse.json();
+        newEmotion = data.emotion || "Neutral";
+        setCurrentEmotion(newEmotion);
+      }
+    } catch (error) {
+      console.error("Error fetching emotion:", error);
+    }
+
+    // Trigger a new AI response using useChat's reload function.
+    // This will send messagesForReload to the API and handle streaming.
+    try {
+      await reload({
+        body: {
+          currentEmotion: newEmotion,
+          interactionLessons,
+        },
+      });
+    } catch (error) {
+      console.error("Error reloading chat after edit:", error);
+      // Optionally, you could revert messages or show an error indicator here
+    }
+  };
+
   const handleSubmitWithEmotion = async (
     event: React.FormEvent<HTMLFormElement>
   ) => {
     event.preventDefault();
 
-    let currentEmotion = "Neutral";
+    let newEmotion = "Neutral";
     if (messages.length > 0) {
       try {
         const emotionResponse = await fetch("/api/ai/emotion", {
@@ -76,7 +130,8 @@ export default function MemoryChatPage() {
         });
         if (emotionResponse.ok) {
           const emotionData = await emotionResponse.json();
-          currentEmotion = emotionData.emotion || "Neutral";
+          newEmotion = emotionData.emotion || "Neutral";
+          setCurrentEmotion(newEmotion);
         } else {
           console.error(
             "Failed to fetch emotion:",
@@ -90,7 +145,7 @@ export default function MemoryChatPage() {
 
     originalHandleSubmit(event, {
       body: {
-        currentEmotion,
+        currentEmotion: newEmotion,
         interactionLessons,
       },
     });
@@ -104,7 +159,12 @@ export default function MemoryChatPage() {
           <SaveConversationButton messages={messages} />
         </CardHeader>
         <CardContent className="flex-1 p-6 overflow-y-auto bg-gray-50">
-          <ChatContainer messages={messages} isLoading={status !== "ready"} />
+          <ChatContainer
+            messages={messages}
+            isLoading={status !== "ready"}
+            onEditMessage={handleEditMessage}
+            currentEmotion={currentEmotion}
+          />
         </CardContent>
         <CardFooter className="p-4 border-t">
           <ChatInput

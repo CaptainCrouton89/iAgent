@@ -1,5 +1,6 @@
-export { ChatContainer } from "./ChatContainer";
-export { ChatInput } from "./ChatInput";
+export * from "./ChatContainer";
+export * from "./ChatInput";
+export * from "./EditableMessage";
 export { MessageBubble } from "./MessageBubble";
-export { SaveConversationButton } from "./SaveConversationButton";
+export * from "./SaveConversationButton";
 export { ToolResponse } from "./ToolResponse";
