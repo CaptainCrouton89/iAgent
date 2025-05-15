@@ -1,0 +1,6 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+Routes should not be long—if they get longer, extract logic to action files for supabase operatoins
