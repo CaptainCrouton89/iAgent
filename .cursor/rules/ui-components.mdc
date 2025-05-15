@@ -1,0 +1,45 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# UI Component Library
+
+This project uses [shadcn/ui](mdc:https:/ui.shadcn.com) for UI components, which is a collection of reusable components built on top of Tailwind CSS.
+
+## Component Usage
+
+UI components are imported from the `@/components/ui` directory:
+
+```tsx
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+```
+
+## Adding New Components
+
+New shadcn components should be added using the following command:
+
+```bash
+pnpm dlx shadcn@latest add [component-name]
+```
+
+## Styling Conventions
+
+- Use Tailwind CSS for styling components
+- Use the `cn()` utility for conditionally joining classNames
+- Follow the shadcn/ui styling patterns for consistency
+
+## Common Components
+
+The project uses these primary UI components:
+
+- **Button**: For action triggers with various variants (primary, outline, ghost)
+- **Input**: For text input fields
+- **Card**: Container component with CardHeader, CardContent, and CardFooter
+- **Toast**: For temporary notifications via the Sonner library
+
+## Component Customization
+
+Components can be customized in the `components.json` configuration file.

@@ -15,6 +15,7 @@ export type Database = {
           background: string | null
           boss_id: string | null
           created_at: string | null
+          cwd: string | null
           goal: string
           id: string
           is_active: boolean | null
@@ -28,6 +29,7 @@ export type Database = {
           background?: string | null
           boss_id?: string | null
           created_at?: string | null
+          cwd?: string | null
           goal: string
           id?: string
           is_active?: boolean | null
@@ -41,6 +43,7 @@ export type Database = {
           background?: string | null
           boss_id?: string | null
           created_at?: string | null
+          cwd?: string | null
           goal?: string
           id?: string
           is_active?: boolean | null
@@ -55,6 +58,41 @@ export type Database = {
             columns: ["boss_id"]
             isOneToOne: false
             referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      clusters: {
+        Row: {
+          auth_id: string
+          created_at: string
+          embedding: string | null
+          id: string
+          parent: string | null
+          summary: string
+        }
+        Insert: {
+          auth_id?: string
+          created_at?: string
+          embedding?: string | null
+          id?: string
+          parent?: string | null
+          summary?: string
+        }
+        Update: {
+          auth_id?: string
+          created_at?: string
+          embedding?: string | null
+          id?: string
+          parent?: string | null
+          summary?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "clusters_parent_fkey"
+            columns: ["parent"]
+            isOneToOne: false
+            referencedRelation: "clusters"
             referencedColumns: ["id"]
           },
         ]
@@ -83,136 +121,68 @@ export type Database = {
         }
         Relationships: []
       }
-      custom_tool_executions: {
+      memories: {
         Row: {
-          agent_id: string | null
+          auth_id: string
+          content: Json
+          context: string | null
           created_at: string
-          error_message: string | null
-          execution_time_ms: number | null
+          embedding: string | null
           id: string
-          implementation_id: string
-          input_args: Json
-          output_result: Json | null
-          success: boolean | null
-          tool_id: string
         }
         Insert: {
-          agent_id?: string | null
+          auth_id?: string
+          content?: Json
+          context?: string | null
           created_at?: string
-          error_message?: string | null
-          execution_time_ms?: number | null
+          embedding?: string | null
           id?: string
-          implementation_id: string
-          input_args?: Json
-          output_result?: Json | null
-          success?: boolean | null
-          tool_id: string
         }
         Update: {
-          agent_id?: string | null
+          auth_id?: string
+          content?: Json
+          context?: string | null
           created_at?: string
-          error_message?: string | null
-          execution_time_ms?: number | null
+          embedding?: string | null
           id?: string
-          implementation_id?: string
-          input_args?: Json
-          output_result?: Json | null
-          success?: boolean | null
-          tool_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "custom_tool_executions_implementation_id_fkey"
-            columns: ["implementation_id"]
-            isOneToOne: false
-            referencedRelation: "custom_tool_implementations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "custom_tool_executions_tool_id_fkey"
-            columns: ["tool_id"]
-            isOneToOne: false
-            referencedRelation: "custom_tools"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      custom_tool_implementations: {
-        Row: {
-          created_at: string
-          execute_code: string
-          id: string
-          is_current_version: boolean
-          sync_tool_code: string | null
-          tool_id: string
-          updated_at: string
-          version: number
-        }
-        Insert: {
-          created_at?: string
-          execute_code: string
-          id?: string
-          is_current_version?: boolean
-          sync_tool_code?: string | null
-          tool_id: string
-          updated_at?: string
-          version?: number
-        }
-        Update: {
-          created_at?: string
-          execute_code?: string
-          id?: string
-          is_current_version?: boolean
-          sync_tool_code?: string | null
-          tool_id?: string
-          updated_at?: string
-          version?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "custom_tool_implementations_tool_id_fkey"
-            columns: ["tool_id"]
-            isOneToOne: false
-            referencedRelation: "custom_tools"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      custom_tools: {
-        Row: {
-          created_at: string
-          description: string
-          id: string
-          input_schema: Json
-          is_active: boolean
-          is_async: boolean
-          name: string
-          owner: string
-          updated_at: string
-        }
-        Insert: {
-          created_at?: string
-          description: string
-          id?: string
-          input_schema?: Json
-          is_active?: boolean
-          is_async?: boolean
-          name: string
-          owner: string
-          updated_at?: string
-        }
-        Update: {
-          created_at?: string
-          description?: string
-          id?: string
-          input_schema?: Json
-          is_active?: boolean
-          is_async?: boolean
-          name?: string
-          owner?: string
-          updated_at?: string
         }
         Relationships: []
+      }
+      memory_cluster_map: {
+        Row: {
+          auth_id: string
+          cluster_id: string
+          id: string
+          memory_id: string
+        }
+        Insert: {
+          auth_id?: string
+          cluster_id?: string
+          id?: string
+          memory_id?: string
+        }
+        Update: {
+          auth_id?: string
+          cluster_id?: string
+          id?: string
+          memory_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "memory_cluster_map_cluster_id_fkey"
+            columns: ["cluster_id"]
+            isOneToOne: false
+            referencedRelation: "clusters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "memory_cluster_map_memory_id_fkey"
+            columns: ["memory_id"]
+            isOneToOne: false
+            referencedRelation: "memories"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       programming_tasks: {
         Row: {

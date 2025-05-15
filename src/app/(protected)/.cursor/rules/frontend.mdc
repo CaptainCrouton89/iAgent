@@ -1,0 +1,7 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+Keep components lightweight—aim for under 200 lines. If the component needs to be more complex, factor out logic
+Use component folders in page directories to hold the components related to that page

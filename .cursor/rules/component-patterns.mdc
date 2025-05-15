@@ -1,0 +1,73 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Component Design Patterns
+
+This project follows specific patterns for component design and organization to ensure maintainability and performance.
+
+## Component Structure
+
+Components should be structured as follows:
+
+1. Imports
+2. TypeScript interfaces
+3. Component definition
+4. Helper functions (if needed)
+
+Example:
+
+```tsx
+import { useState } from 'react';
+import { SomeType } from '@/types';
+
+interface ComponentProps {
+  prop1: string;
+  prop2?: number;
+}
+
+export function Component({ prop1, prop2 = 0 }: ComponentProps) {
+  // Component logic
+  return (
+    <div>
+      {/* JSX content */}
+    </div>
+  );
+}
+
+// Helper functions if needed
+```
+
+## Component Organization
+
+- Place related components in a shared directory
+- Create an `index.ts` file to export all components
+- Factor out complex UI into separate components
+- Keep components small and focused on a single responsibility
+
+## State Management
+
+- Use React hooks for local component state
+- Prefer `useState` for simple state
+- Extract complex state logic into custom hooks
+- Avoid prop drilling by factoring out shared components
+
+## Props and TypeScript
+
+- Define clear TypeScript interfaces for all component props
+- Make props optional with default values when appropriate
+- Use destructuring for props in component parameters
+
+## Performance Considerations
+
+- Avoid unnecessary re-renders with proper dependency arrays
+- Use memoization for expensive computations
+- Split large components into smaller ones
+- Keep render functions pure
+
+## Error Handling
+
+- Implement error boundaries for critical components
+- Use try/catch for async operations
+- Provide user feedback via toast notifications

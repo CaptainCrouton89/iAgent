@@ -1,0 +1,40 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Memory Chat Component Structure
+
+The Memory Chat feature follows a modular component-based architecture.
+
+## Component Organization
+
+The main memory chat components are located in `src/app/(protected)/private/memory-chat/components/`:
+
+- [index.ts](mdc:src/app/(protected)/private/memory-chat/components/index.ts): Exports all components for easy imports
+- [MessageBubble.tsx](mdc:src/app/(protected)/private/memory-chat/components/MessageBubble.tsx): Renders a single chat message
+- [ToolResponse.tsx](mdc:src/app/(protected)/private/memory-chat/components/ToolResponse.tsx): Handles tool invocation responses
+- [ChatContainer.tsx](mdc:src/app/(protected)/private/memory-chat/components/ChatContainer.tsx): Contains the message list
+- [ChatInput.tsx](mdc:src/app/(protected)/private/memory-chat/components/ChatInput.tsx): Manages the chat input form
+- [SaveConversationButton.tsx](mdc:src/app/(protected)/private/memory-chat/components/SaveConversationButton.tsx): Handles saving conversations
+
+## Component Responsibilities
+
+- **MessageBubble**: Renders individual messages with appropriate styling based on role (user/assistant)
+- **ToolResponse**: Renders tool invocations with different states (call/result/partial-call)
+- **ChatContainer**: Manages the scrollable container with all messages
+- **ChatInput**: Handles form submission and input changes
+- **SaveConversationButton**: Manages the state and API calls for saving conversations
+
+## Usage Pattern
+
+The main page in [page.tsx](mdc:src/app/(protected)/private/memory-chat/page.tsx) composes these components together and provides them with the necessary props from the `useChat` hook.
+
+## Memory Saving Flow
+
+1. User clicks the SaveConversationButton
+2. Client makes a POST request to `/api/memory`
+3. Server-side action saves the conversation to Supabase
+4. Embeddings are generated for the conversation content
+5. Success/error is reported back to the user via toast notifications
+

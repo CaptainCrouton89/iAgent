@@ -1,0 +1,98 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# AI SDK Integration Patterns
+
+This project uses the [AI SDK](mdc:https:/ai-sdk.dev) for building AI-powered features. The following patterns guide AI SDK integration.
+
+## Chat Implementation
+
+The primary pattern for chat interfaces uses the `useChat` hook from `@ai-sdk/react`:
+
+```tsx
+const { 
+  messages, 
+  input, 
+  handleInputChange, 
+  handleSubmit, 
+  status 
+} = useChat({
+  api: "/api/chat-endpoint",
+  maxSteps: 5,
+  onToolCall: async ({ toolCall }) => {
+    // Handle client-side tool calls
+  }
+});
+```
+
+## API Routes for AI
+
+API routes for AI features follow this pattern:
+
+```ts
+import { openai } from "@ai-sdk/openai";
+import { streamText } from "ai";
+
+export async function POST(req: Request) {
+  const { messages } = await req.json();
+  
+  const result = streamText({
+    model: openai("gpt-4.1"),
+    messages,
+    toolCallStreaming: true,
+    maxSteps: 5,
+    tools: {
+      // Tool definitions
+    },
+    onFinish: async ({ response }) => {
+      // Save messages or perform other operations on completion
+    }
+  });
+  
+  return result.toDataStreamResponse();
+}
+```
+
+## Memory and Persistence
+
+For saving and loading chat history:
+
+1. Use server actions for database operations
+2. Implement save functionality via POST endpoints
+3. Generate embeddings for search/retrieval
+4. Store conversations in structured format
+
+## Tool Integration
+
+Tools are defined with:
+
+- Description
+- Parameters (using Zod schema)
+- Execute function that returns a result
+
+Example:
+
+```ts
+tools: {
+  getSystemInfo: {
+    description: "Get information about the system",
+    parameters: z.object({
+      type: z.string().describe("The type of system information to retrieve"),
+    }),
+    execute: async ({ type }) => {
+      return `System info for ${type}`;
+    },
+  },
+}
+```
+
+## Message Rendering
+
+Message rendering patterns:
+
+1. Map through messages array
+2. Differentiate between user and assistant messages
+3. Handle different message part types (text, tool-invocation)
+4. Provide appropriate UI for tool execution states
