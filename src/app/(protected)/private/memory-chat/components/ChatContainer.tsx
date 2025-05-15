@@ -8,7 +8,7 @@ interface ChatContainerProps {
 
 export function ChatContainer({ messages, isLoading }: ChatContainerProps) {
   return (
-    <div className="flex-1 overflow-auto space-y-4 h-[calc(100%-8rem)] min-h-[300px]">
+    <div className="flex-1 overflow-auto space-y-4 min-h-[300px]">
       {messages.map((message) => (
         <MessageBubble key={message.id} message={message} />
       ))}

@@ -1,5 +1,4 @@
 import { Message } from "@ai-sdk/react";
-import { ToolResponse } from "./ToolResponse";
 
 interface MessageBubbleProps {
   message: Message;
@@ -29,11 +28,11 @@ export function MessageBubble({ message }: MessageBubbleProps) {
               );
             }
 
-            if (part.type === "tool-invocation") {
-              return (
-                <ToolResponse key={i} toolInvocation={part.toolInvocation} />
-              );
-            }
+            // if (part.type === "tool-invocation") {
+            //   return (
+            //     <ToolResponse key={i} toolInvocation={part.toolInvocation} />
+            //   );
+            // }
 
             return null;
           })}

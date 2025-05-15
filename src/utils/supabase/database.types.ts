@@ -62,6 +62,27 @@ export type Database = {
           },
         ]
       }
+      assistant_settings: {
+        Row: {
+          auth_id: string | null
+          created_at: string
+          id: number
+          interaction_lessons: Json
+        }
+        Insert: {
+          auth_id?: string | null
+          created_at?: string
+          id?: number
+          interaction_lessons?: Json
+        }
+        Update: {
+          auth_id?: string | null
+          created_at?: string
+          id?: number
+          interaction_lessons?: Json
+        }
+        Relationships: []
+      }
       clusters: {
         Row: {
           auth_id: string

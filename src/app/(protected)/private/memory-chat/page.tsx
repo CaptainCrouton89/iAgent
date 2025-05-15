@@ -8,6 +8,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { useChat } from "@ai-sdk/react";
+import { useEffect, useState } from "react";
 import { ChatContainer, ChatInput, SaveConversationButton } from "./components";
 
 interface SystemInfoArgs {
@@ -31,6 +32,34 @@ export default function MemoryChatPage() {
       }
     },
   });
+
+  const [interactionLessons, setInteractionLessons] = useState<string[]>([]);
+
+  useEffect(() => {
+    const fetchLessons = async () => {
+      try {
+        const response = await fetch("/api/assistant-settings");
+        if (response.ok) {
+          const data = await response.json();
+          if (data && Array.isArray(data.interaction_lessons)) {
+            setInteractionLessons(data.interaction_lessons);
+            console.log(
+              "Fetched interaction lessons:",
+              data.interaction_lessons
+            );
+          }
+        } else {
+          console.error(
+            "Failed to fetch assistant settings:",
+            await response.text()
+          );
+        }
+      } catch (error) {
+        console.error("Error fetching assistant settings:", error);
+      }
+    };
+    fetchLessons();
+  }, []);
 
   const handleSubmitWithEmotion = async (
     event: React.FormEvent<HTMLFormElement>
@@ -59,7 +88,12 @@ export default function MemoryChatPage() {
       }
     }
 
-    originalHandleSubmit(event, { body: { currentEmotion } });
+    originalHandleSubmit(event, {
+      body: {
+        currentEmotion,
+        interactionLessons,
+      },
+    });
   };
 
   return (

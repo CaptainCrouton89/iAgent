@@ -1,3 +1,4 @@
+import { formatRelativeTime } from "@/utils/dateFormat";
 import { searchMemories } from "@/utils/supabase/memory-search";
 import { tool } from "ai";
 import { z } from "zod";
@@ -41,19 +42,21 @@ export const memorySearchTool = tool({
             messageContent = memory.compressed_conversation
               .map(
                 (compressedMsg: { role: string; content: string }) =>
-                  `${compressedMsg.role}: ${compressedMsg.content}`
+                  `${compressedMsg.role === "user" ? "Silas" : "You"}: ${
+                    compressedMsg.content
+                  }`
               )
               .join("\\n");
           }
           // Fallbacks to memory.content are removed as per user request
 
-          return `Memory ${index + 1} (${new Date(
+          return `Memory ${index + 1} (${formatRelativeTime(
             memory.created_at
-          ).toLocaleString()}) - Relevance: ${Math.round(
+          )}) - Relevance: ${Math.round(
             memory.similarity * 100
-          )}%:\\n${messageContent}\\n`;
+          )}%:\n${messageContent}\n`;
         })
-        .join("\\n---\\n");
+        .join("\n---\n");
     } catch (error) {
       console.error("Error searching memories:", error);
       return "Error searching memories. Please try again.";
