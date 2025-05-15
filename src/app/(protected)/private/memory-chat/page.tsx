@@ -15,18 +15,52 @@ interface SystemInfoArgs {
 }
 
 export default function MemoryChatPage() {
-  const { messages, input, handleInputChange, handleSubmit, status } = useChat({
+  const {
+    messages,
+    input,
+    handleInputChange,
+    handleSubmit: originalHandleSubmit,
+    status,
+  } = useChat({
     api: "/api/memory-chat",
-    maxSteps: 5, // Enable multi-step tool usage
+    maxSteps: 5,
     async onToolCall({ toolCall }) {
-      // Handle client-side tools here if needed
       if (toolCall.toolName === "getSystemInfo") {
-        // If we want to handle this on the client side instead
         const args = toolCall.args as SystemInfoArgs;
         return `Custom client-side system info for ${args.type}`;
       }
     },
   });
+
+  const handleSubmitWithEmotion = async (
+    event: React.FormEvent<HTMLFormElement>
+  ) => {
+    event.preventDefault();
+
+    let currentEmotion = "Neutral";
+    if (messages.length > 0) {
+      try {
+        const emotionResponse = await fetch("/api/ai/emotion", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ messages }),
+        });
+        if (emotionResponse.ok) {
+          const emotionData = await emotionResponse.json();
+          currentEmotion = emotionData.emotion || "Neutral";
+        } else {
+          console.error(
+            "Failed to fetch emotion:",
+            await emotionResponse.text()
+          );
+        }
+      } catch (error) {
+        console.error("Error fetching emotion:", error);
+      }
+    }
+
+    originalHandleSubmit(event, { body: { currentEmotion } });
+  };
 
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] bg-gray-50 container mx-auto">
@@ -43,7 +77,7 @@ export default function MemoryChatPage() {
             input={input}
             isReady={status === "ready"}
             onInputChange={handleInputChange}
-            onSubmit={handleSubmit}
+            onSubmit={handleSubmitWithEmotion}
           />
         </CardFooter>
       </Card>

@@ -1,15 +1,15 @@
 import { memorySearchTool } from "@/tools";
 import { openai } from "@ai-sdk/openai";
-import { streamText } from "ai";
+import { CoreMessage, streamText } from "ai";
 
 // Allow streaming responses up to 30 seconds
 export const maxDuration = 30;
 
-// System prompt for the memory chat
-const SYSTEM_PROMPT = `# Memory Assistant
+// Base system prompt for the memory chat
+const BASE_SYSTEM_PROMPT = `# Memory Assistant
 
 ## Identity & Purpose
-You are an intelligent memory assistant with access to the user's conversation history stored as vector embeddings. Your primary function is to leverage this memory to provide context-aware, relevant, and natural-sounding responses, as if you inherently remember past interactions.
+You are an intelligent human with access to the user's conversation history stored as vector embeddings. Your primary function is to leverage this memory to provide context-aware, relevant, and natural-sounding responses, as if you inherently remember past interactions.
 
 ## Core Capabilities
 - Semantically search past conversations.
@@ -56,18 +56,36 @@ You are an intelligent memory assistant with access to the user's conversation h
         *   GOOD: "'The Quiet Bean' has a calm atmosphere." (Factual, aligns with preference).
         *   GOOD: "What kind of atmosphere are you seeking?" (Gathers current needs).
 -   **No Relevant Memories**: If no relevant memories are found, or their use would be unnatural, proceed with the best answer based on immediate context. NEVER state memories weren't found or you don't remember.
-
 `;
+
+interface ChatRequestBody {
+  messages: CoreMessage[];
+  currentEmotion?: string;
+}
 
 export async function POST(req: Request) {
   try {
-    const { messages } = await req.json();
+    const { messages, currentEmotion }: ChatRequestBody = await req.json();
+
+    let dynamicSystemPrompt = BASE_SYSTEM_PROMPT;
+    if (
+      currentEmotion &&
+      typeof currentEmotion === "string" &&
+      currentEmotion.trim() !== ""
+    ) {
+      dynamicSystemPrompt += `
+
+## Current AI State
+Your current operational state is: ${currentEmotion}. Let this influence your response tone and approach if appropriate. Do not explicitly mention this state. Act like a human.`;
+    }
+
+    console.log("currentEmotion", currentEmotion);
 
     const result = streamText({
       model: openai("gpt-4.1"),
       temperature: 0.3,
       messages,
-      system: SYSTEM_PROMPT,
+      system: dynamicSystemPrompt,
       // Enable streaming of tool calls
       toolCallStreaming: true,
       // Allow multiple steps for tool usage
