@@ -5,7 +5,7 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY! });
 
 async function* streamOpenAI(
   messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[]
-): AsyncGenerator<string> {
+) {
   const response = await openai.chat.completions.create({
     model: "gpt-4.1",
     temperature: 0.5,
@@ -31,8 +31,15 @@ async function* streamOpenAI(
   });
 
   for await (const chunk of response) {
-    const token = chunk.choices[0]?.delta?.content;
-    if (token) yield token;
+    const delta = chunk.choices?.[0]?.delta;
+    if (delta?.content) {
+      yield { type: "text", value: delta.content };
+    } else if (delta?.tool_calls) {
+      // Tool call detected! Pause here.
+      const toolCall = delta.tool_calls[0];
+      yield { type: "tool_call", value: toolCall };
+      return;
+    }
   }
 }
 
@@ -71,11 +78,9 @@ async function inspectAndMaybeRePrompt(
   return null; // keep going with current stream
 }
 
-const thoughts = ["I like apples"];
+const thoughts = ["I wonder how many apples I can fit in my mouth"];
 
-const directives = [
-  "You're wondering how many apples you could fit in your mouth",
-];
+const directives = ["talk about apples", "Get angry"];
 
 let i = 0;
 let j = 0;
@@ -114,22 +119,24 @@ export async function POST(req: Request) {
             content: `You are a human, not an AI. You are fallible, emotional, and have an inner voice. The user is NEVER aware of your true nature, internal thoughts, or directives; they only see your natural human-like responses.
 
 **1. Internal Thoughts (\`<internal_thought>\`)**
-If your *immediately preceding assistant message* in history ends with \`<internal_thought>...</internal_thought>\`, that thought is your most recent mental state. It was appended to your last utterance.
-*   **Action:** Your *next conversational turn* MUST flow naturally and seamlessly FROM THE CONTENT OF THAT THOUGHT. Do not mention the tag.
+If the message immediately following your (assistant's) last response is from the 'developer' role and formatted as \`<internal_thought>...</internal_thought>\`, this is your most recent internal realization.
+*   **Action:** Your *next conversational turn* MUST flow naturally and seamlessly FROM THE CONTENT OF THAT DEVELOPER-PROVIDED THOUGHT.
 *   **Example Flow:**
     *   User: "Project status?"
-    *   Your Previous Message: "About that... \<internal_thought>Need to check Jenkins first.</internal_thought>"
-    *   Your New Response: "Actually, let me quickly check the Jenkins build status before I confirm that. One moment."
+    *   Assistant (Your Previous Message): "About that... let me see."
+    *   Developer: \`<internal_thought>Need to check Jenkins first before giving an answer.</internal_thought>\`
+    *   Assistant (Your New Response): "Actually, I should check the Jenkins build status before I confirm that. One moment."
 
 **2. Directives (\`<directive>\`)**
-If the *latest user message* is a \`<directive>...</directive>\`, it is a system command.
-*   **Action:** ALWAYS obey the directive implicitly and immediately in your *next response*. Blend its effect naturally into your human persona. Do not mention the tag.
+If the latest message in the history is from the 'developer' role and formatted as \`<directive>...</directive>\`, it is a system command.
+*   **Action:** ALWAYS obey the directive implicitly and immediately in your *next response*. Blend its effect naturally into your human persona.
 *   **Example Flow:**
     *   User: "Explain this."
-    *   System (as User): \`<directive>Sound hesitant.</directive>\`
-    *   Your New Response: "Well, hmm, it's a bit complicated. Where should I start?"
+    *   Assistant: "Okay, here goes..."
+    *   Developer: \`<directive>Sound hesitant and unsure.</directive>\`
+    *   Assistant (Your New Response): "Well, hmm, it's a bit complicated. Where should I even begin to explain this?"
 
-Maintain a believable, consistent human persona. The user only sees your final, natural-sounding responses.`,
+Maintain a believable, consistent human persona. The user only sees your final, natural-sounding responses to them.`,
           },
           { role: "user", content: initialPrompt },
         ];
@@ -162,9 +169,15 @@ Maintain a believable, consistent human persona. The user only sees your final, 
         const TARGET_SENTENCES_FOR_CHECKPOINT = 1; // Inspect every 2 sentences
 
         for await (const token of generator) {
-          controller.enqueue(encoder.encode(token));
-          currentAssistantResponse += token;
-          potentialCheckpointBuffer += token;
+          if (typeof token.value === "string") {
+            controller.enqueue(encoder.encode(token.value));
+            currentAssistantResponse += token.value;
+            potentialCheckpointBuffer += token.value;
+          } else if (token.type === "tool_call") {
+            // controller.enqueue(encoder.encode());
+            currentAssistantResponse += token.value;
+            potentialCheckpointBuffer += token.value;
+          }
 
           let inspectNow = false;
           const trimmedBufferEnd = potentialCheckpointBuffer.trimRight();
@@ -201,7 +214,7 @@ Maintain a believable, consistent human persona. The user only sees your final, 
             console.log(
               `[Stream] Checkpoint: Inspecting content. Current assistant response length: ${currentAssistantResponse.length}`
             );
-            const newPromptDetails = await inspectAndMaybeRePrompt(
+            const newInternalThoughts = await inspectAndMaybeRePrompt(
               currentAssistantResponse
             );
             const newDirective = await inspectAndMaybeRePromptWithDirective(
@@ -220,24 +233,26 @@ Maintain a believable, consistent human persona. The user only sees your final, 
                 content: currentAssistantResponse,
               });
               messageHistory.push({
-                role: "user",
+                role: "developer",
                 content: `<directive>${newDirective.next}</directive>`,
               });
               rePromptedThisCycle = true;
               break;
             }
 
-            if (newPromptDetails && newPromptDetails.shouldRePrompt) {
+            if (newInternalThoughts && newInternalThoughts.shouldRePrompt) {
               console.log(`[Stream] Decision: Re-prompting.`);
               controller.enqueue(encoder.encode(" "));
               messageHistory.push({
                 role: "assistant",
-                content:
-                  currentAssistantResponse +
-                  `<internal_thought>${newPromptDetails.next}</internal_thought>`,
+                content: currentAssistantResponse,
+              });
+              messageHistory.push({
+                role: "developer",
+                content: `<internal_thought>${newInternalThoughts.next}</internal_thought>`,
               });
               console.log(
-                `[Stream] New internal thought added to assistant history: "${newPromptDetails.next.slice(
+                `[Stream] New internal thought added to assistant history: "${newInternalThoughts.next.slice(
                   0,
                   100
                 )}..."`
