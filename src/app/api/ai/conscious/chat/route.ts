@@ -202,6 +202,11 @@ export async function POST(req: Request) {
               newThoughtFromStreamAvailable = false; // Reset the flag
 
               if (currentAssistantResponse.trim().length > 0) {
+                controller.enqueue(encoder.encode(" "));
+                messageHistory.push({
+                  role: "assistant",
+                  content: currentAssistantResponse,
+                });
                 messageHistory.push({
                   role: "developer",
                   content: currentAssistantResponse,
