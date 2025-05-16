@@ -52,7 +52,7 @@ async function someAsyncLogic(text: string) {
   i++;
   i = i % thoughts.length;
   return {
-    shouldRePrompt: text.includes("apple"), // example condition
+    shouldRePrompt: text.includes("fridge magnet"), // example condition
     next: `${thoughts[i]}`,
   };
 }
@@ -62,7 +62,7 @@ async function someAsyncLogicWithDirective(text: string) {
   j++;
   j = j % directives.length;
   return {
-    shouldRePrompt: text.includes("banana"), // example condition
+    shouldRePrompt: text.includes("cantaloupe"), // example condition
     next: `${directives[j]}`,
   };
 }
@@ -76,18 +76,6 @@ export async function POST(req: Request) {
   const thoughtsStream = streamThoughts(initialPrompt);
   const reader = thoughtsStream.getReader();
 
-  /* optional stuff for reader stream in parallel */
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      const chunk = decoder.decode(value, { stream: true });
-      console.log("Thought chunk:", chunk); // see it as it arrives
-    }
-  } finally {
-    reader.releaseLock();
-  }
-
   const stream = new ReadableStream({
     async start(controller) {
       const messageHistory: OpenAI.Chat.Completions.ChatCompletionMessageParam[] =
@@ -98,6 +86,44 @@ export async function POST(req: Request) {
           },
           { role: "user", content: initialPrompt },
         ];
+
+      let newThoughtFromStreamAvailable = false; // Flag to signal new thoughts
+
+      // Asynchronously process thoughts and add them to messageHistory
+      (async () => {
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) {
+              console.log("[ThoughtsReader] Thoughts stream finished.");
+              break;
+            }
+            const thoughtChunk = decoder.decode(value, { stream: true }).trim();
+            if (thoughtChunk) {
+              messageHistory.push({
+                role: "developer",
+                content: `<internal_thought>${thoughtChunk}</internal_thought>`,
+              });
+              console.log(
+                `[ThoughtsReader] Added thought to message history: "${thoughtChunk.slice(
+                  0,
+                  100
+                )}..."`
+              );
+              newThoughtFromStreamAvailable = true; // Signal new thought
+            }
+          }
+        } catch (error) {
+          console.error(
+            "[ThoughtsReader] Error reading thoughts stream:",
+            error
+          );
+        } finally {
+          reader.releaseLock();
+          console.log("[ThoughtsReader] Reader lock released.");
+        }
+      })(); // IIFE to start processing thoughts in parallel
+
       let shouldContinueStreaming = true;
 
       console.log(
@@ -169,6 +195,30 @@ export async function POST(req: Request) {
           }
 
           if (inspectNow) {
+            if (newThoughtFromStreamAvailable) {
+              console.log(
+                "[Stream] New thought detected from parallel stream. Triggering re-prompt."
+              );
+              newThoughtFromStreamAvailable = false; // Reset the flag
+
+              if (currentAssistantResponse.trim().length > 0) {
+                messageHistory.push({
+                  role: "developer",
+                  content: currentAssistantResponse,
+                });
+                console.log(
+                  `[Stream] Saved partial assistant response due to new external thought. Length: ${currentAssistantResponse.length}`
+                );
+              }
+              // Reset buffers for the new generation cycle
+              currentAssistantResponse = "";
+              potentialCheckpointBuffer = "";
+              sentenceCountForCheckpoint = 0;
+
+              rePromptedThisCycle = true;
+              break; // Break from this inner loop to force a new call to streamOpenAI
+            }
+
             console.log(
               `[Stream] Checkpoint: Inspecting content. Current assistant response length: ${currentAssistantResponse.length}`
             );
@@ -179,7 +229,6 @@ export async function POST(req: Request) {
               currentAssistantResponse
             );
 
-            potentialCheckpointBuffer = "";
             potentialCheckpointBuffer = "";
             sentenceCountForCheckpoint = 0; // Reset sentence counter after inspection
 
@@ -242,6 +291,7 @@ export async function POST(req: Request) {
       }
 
       controller.close();
+      console.log("history", messageHistory.map((m) => m.content).join("\n"));
       console.log("[Stream] Stream closed.");
     },
   });
