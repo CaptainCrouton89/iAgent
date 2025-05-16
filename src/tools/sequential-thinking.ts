@@ -208,3 +208,42 @@ export const thinkThroughCreatively = async (
   );
   return filteredToolCallArgs.map((arg) => arg.thought);
 };
+
+export function streamThoughts(prompt: string): ReadableStream {
+  const encoder = new TextEncoder();
+
+  const stream = new ReadableStream({
+    async start(controller) {
+      await generateText({
+        system: CREATIVE_THOUGHT_SYSTEM_PROMPT,
+        prompt: `${prompt}\n\nSpend some effort thinking this topic.`,
+        model: openai("gpt-4.1-nano"),
+        tools: {
+          "sequential-thinking": sequentialThinkingTool,
+          "memory-search": memorySearchTool,
+        },
+        maxTokens: 2000,
+        temperature: 0.8,
+        maxSteps: 10,
+        onStepFinish: (step) => {
+          if (step.finishReason === "tool-calls" && step.toolCalls) {
+            for (const call of step.toolCalls) {
+              if (
+                call.type === "tool-call" &&
+                call.args &&
+                "thought" in call.args
+              ) {
+                const text = call.args.thought + "\n";
+                controller.enqueue(encoder.encode(text));
+              }
+            }
+          }
+        },
+      });
+
+      controller.close();
+    },
+  });
+
+  return stream;
+}
