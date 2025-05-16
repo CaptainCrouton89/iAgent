@@ -6,45 +6,54 @@ import { generateObject } from "ai";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-// Zod schema for extracting interaction lessons
-const lessonSchema = z.object({
-  lessons_learned: z
+// Zod schema for the preliminary lesson check
+const preliminaryLessonCheckSchema = z.object({
+  lesson_exists: z
     .boolean()
-    .describe(
-      "Indicates if any specific lessons on how to better interact with the user were learned from this conversation."
-    ),
+    .describe("Indicates if there is definitely a new lesson for the AI."),
+});
+
+// Zod schema for extracting interaction lessons - SIMPLIFIED
+const lessonSchema = z.object({
   lessons_description: z
     .string()
-    .optional()
+    .optional() // Optional: AI might return nothing if no new lesson after all
     .describe(
-      "A concise, actionable piece of advice for the main conversational agent, phrased in the second person (addressing the agent). Examples: 'When the user seems rushed, you should provide more concise answers.', 'You might want to acknowledge past points more explicitly, as the user responds well to this.', 'If the user mentions [topic X], try to recall their previous sentiment about it, as this is important to them.'"
-    ),
-  importance_score: z
-    .number()
-    .min(0)
-    .max(1)
-    .optional()
-    .describe(
-      "A score from 0.0 to 1.0 indicating how crucial this lesson is for the main agent to incorporate. Only present if lessons_learned is true."
+      "A concise, actionable piece of advice for the main conversational agent, phrased in the second person (addressing the agent). Examples: 'When the user seems rushed, you should provide more concise answers.', 'You might want to acknowledge past points more explicitly, as the user responds well to this.', 'If the user mentions [topic X], try to recall their previous sentiment about it, as this is important to them.' If no new, distinct lesson is found, this may be empty or not present."
     ),
 });
 
-const LESSON_EXTRACTION_SYSTEM_PROMPT = `You are an AI interaction analyst. Your task is to review the provided conversation and extract a key actionable lesson that a conversational AI (the user's conversational partner) can use to improve its future interactions with THIS SPECIFIC USER. 
+const PRELIMINARY_LESSON_CHECK_SYSTEM_PROMPT = `You are an AI interaction analyst. You will be provided with a list of existing interaction lessons for a user and a new conversation with that same user.
+Your ONLY task is to determine if there is ANY potential NEW, non-duplicate lesson that a conversational AI could learn from the LATEST conversation to improve its future interactions with the user.
+Do not extract the lesson itself. Just answer true or false.
 
-Focus on: 
-- User's explicit or implicit communication preferences (e.g., tone, directness, level of detail).
-- Topics or styles that led to positive engagement or, conversely, frustration/confusion.
-- Key takeaways about what this user values in conversation (e.g., being remembered, efficiency, empathy, humor).
+Consider:
+- Explicit or implicit user preferences in the new conversation.
+- Moments of positive engagement or frustration/confusion in the new conversation.
+- Any patterns in user behavior or communication style in the new conversation.
+- CRITICALLY: Ensure the potential lesson is genuinely new and not a rephrasing of an existing lesson provided.
 
-The output 'lessons_description' should be a **very concise, direct, and actionable instruction for the AI, phrased in the second person and starting with a verb (imperative mood).**
+If some greater truth about how to interact with the user is revealed in the new conversation, respond true. Otherwise, respond false.
+
+The answer should usually be no.`;
+
+const LESSON_EXTRACTION_SYSTEM_PROMPT = `You are an AI interaction analyst. You have been provided with a list of existing interaction lessons for this user, and a new conversation. A preliminary check indicated a potential new lesson in this conversation.
+Your task is to carefully review the LATEST conversation and extract THE SPECIFIC actionable lesson.
+The lesson you extract must be distinct and not a duplicate or slight rephrasing of any of the EXISTING lessons provided in the prompt.
+
+Focus on:
+- User's explicit or implicit communication preferences (e.g., tone, directness, level of detail) from the LATEST conversation.
+- Topics or styles that led to positive engagement or, conversely, frustration/confusion in the LATEST conversation.
+- Key takeaways about what this user values in conversation (e.g., being remembered, efficiency, empathy, humor) based on the LATEST conversation.
+
+The output should be ONLY the lesson description string itself. It should be a **very concise, direct, and actionable instruction for the AI, phrased in the second person and starting with a verb (imperative mood).**
 For example:
 - "Offer more concrete examples when explaining complex topics to this user."
 - "Try a more empathetic tone when the user expresses frustration."
 - "Avoid pitying or patronizing the user; maintain respectful, neutral tone."
 
-Output ONLY whether a lesson was learned, the lesson description (following the specified format), and its importance score.
-- If no specific, actionable lesson is identified that would significantly improve future interactions, set lessons_learned to false.
-- If a lesson is identified, describe it as an actionable insight for an AI and provide an importance score. Higher scores for lessons that are critical for maintaining good rapport or achieving the user's conversational goals.`;
+If, after careful review, no genuinely distinct and actionable lesson (compared to the existing ones) can be formulated from the LATEST conversation, return an empty string or a very short phrase indicating no new lesson (e.g., "No new lesson found.").
+CRITICALLY: Do NOT return any of the existing lessons provided. Only return a genuinely new insight, or indicate none was found.`;
 
 export async function POST(req: Request) {
   try {
@@ -68,140 +77,201 @@ export async function POST(req: Request) {
       );
     }
 
-    // After successfully saving the conversation, attempt to extract interaction lessons
     let lessonExtractionError: string | null = null;
     let lessonSaved = false;
+    let preliminaryCheckSkippedDetailedExtraction = false;
 
-    try {
-      const { object: lessonData } = await generateObject({
-        model: openai("gpt-4.1-nano"),
-        schema: lessonSchema,
-        prompt: `Analyze the following conversation and extract interaction lessons based on the user's behavior and preferences: ${messages
-          .map((m) => `${m.role}: ${m.content}`)
-          .join("\n")}`,
-        system: LESSON_EXTRACTION_SYSTEM_PROMPT,
-        temperature: 0.2, // Low temperature for more deterministic lesson extraction
-      });
+    const supabase = await createClient(); // Create client once
+    let auth_id: string | null = null;
+    let existingLessons: string[] = [];
+    let currentSettingsId: string | number | null = null; // Supabase ID can be number or string (UUID)
 
-      console.log("Extracted lesson data:", lessonData);
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
 
-      if (
-        lessonData.lessons_learned &&
-        lessonData.lessons_description &&
-        lessonData.importance_score &&
-        lessonData.importance_score > 0.5
-      ) {
-        const supabase = await createClient();
-        const {
-          data: { user },
-          error: userError,
-        } = await supabase.auth.getUser();
+    if (userError || !user) {
+      console.error(
+        "Error fetching user for lesson context/saving:",
+        userError
+      );
+      lessonExtractionError =
+        "Failed to authenticate user for lesson processing.";
+      // If no user, we can't proceed with lesson logic that requires user context
+    } else {
+      auth_id = user.id;
+      // Fetch current settings for this auth_id to get existing lessons
+      const { data: currentSettingsData, error: fetchError } = await supabase
+        .from("assistant_settings")
+        .select("id, interaction_lessons")
+        .eq("auth_id", auth_id)
+        .maybeSingle();
 
-        if (userError || !user) {
-          console.error("Error fetching user for lesson saving:", userError);
-          lessonExtractionError =
-            "Failed to authenticate user for saving lesson.";
-        } else {
-          const auth_id = user.id;
-          const newLessonDescription = lessonData.lessons_description;
-
-          // Fetch current settings for this auth_id
-          const { data: currentSettings, error: fetchError } = await supabase
-            .from("assistant_settings")
-            .select("id, interaction_lessons")
-            .eq("auth_id", auth_id)
-            .single(); // Expecting zero or one row
-
-          if (fetchError && fetchError.code !== "PGRST116") {
-            // PGRST116: Row not found, which is fine
-            console.error(
-              "Error fetching current assistant_settings:",
-              fetchError
-            );
-            lessonExtractionError =
-              "Failed to fetch current interaction lessons.";
-          } else {
-            let existingLessons: string[] = [];
-            const settingsData = currentSettings?.interaction_lessons;
-
-            if (
-              Array.isArray(settingsData) &&
-              settingsData.every((lesson) => typeof lesson === "string")
-            ) {
-              existingLessons = settingsData as string[];
-            } else if (settingsData) {
-              // It exists but is not a clean string array
-              console.warn(
-                `Existing interaction lessons for auth_id ${auth_id} are not a valid string array. New lesson will be added to an empty list for this update if saving a new row, or overwrite if updating existing. Data:`,
-                settingsData
-              );
-              // existingLessons remains [], so effectively starting fresh for this update if the stored data is messy
-            }
-            // If settingsData is null/undefined, existingLessons also remains []
-
-            const updatedLessons = [...existingLessons, newLessonDescription];
-
-            // Check if a row was found or if it's an insert case
-            const settingsExist = !fetchError && currentSettings;
-
-            if (settingsExist) {
-              // Update existing row
-              const { error: updateError } = await supabase
-                .from("assistant_settings")
-                .update({ interaction_lessons: updatedLessons })
-                .eq("auth_id", auth_id);
-              if (updateError) {
-                console.error(
-                  "Error updating assistant_settings:",
-                  updateError
-                );
-                lessonExtractionError =
-                  "Failed to save interaction lesson (update).";
-              } else {
-                console.log(
-                  "Interaction lesson updated for auth_id:",
-                  auth_id,
-                  newLessonDescription
-                );
-                lessonSaved = true;
-              }
-            } else {
-              // Insert new row (this uses updatedLessons which would be [newLessonDescription] if existing was invalid/empty)
-              const { error: insertError } = await supabase
-                .from("assistant_settings")
-                .insert({
-                  auth_id: auth_id,
-                  interaction_lessons: updatedLessons,
-                });
-              if (insertError) {
-                console.error(
-                  "Error inserting new assistant_settings:",
-                  insertError
-                );
-                lessonExtractionError =
-                  "Failed to save interaction lesson (insert).";
-              } else {
-                console.log(
-                  "Interaction lesson inserted for auth_id:",
-                  auth_id,
-                  newLessonDescription
-                );
-                lessonSaved = true;
-              }
-            }
-          }
+      if (fetchError) {
+        console.error(
+          "Error fetching current assistant_settings for lesson context:",
+          fetchError
+        );
+        lessonExtractionError =
+          "Failed to fetch existing lessons; proceeding without them.";
+        // existingLessons remains empty
+      } else if (currentSettingsData) {
+        currentSettingsId = currentSettingsData.id;
+        const settingsLessons = currentSettingsData.interaction_lessons;
+        if (
+          Array.isArray(settingsLessons) &&
+          settingsLessons.every((lesson) => typeof lesson === "string")
+        ) {
+          existingLessons = settingsLessons as string[];
+        } else if (settingsLessons) {
+          console.warn(
+            `Existing interaction lessons for auth_id ${auth_id} (fetched early) are not a valid string array. Data:`,
+            settingsLessons
+          );
+          // existingLessons remains empty
         }
       }
-    } catch (e: unknown) {
-      console.error("Error during lesson extraction or saving:", e);
-      if (e instanceof Error) {
-        lessonExtractionError = e.message;
-      } else if (typeof e === "string") {
-        lessonExtractionError = e;
-      } else {
-        lessonExtractionError =
-          "An unexpected error occurred during lesson processing.";
+    }
+
+    // Only proceed with lesson extraction if we have a user
+    if (auth_id) {
+      try {
+        const preliminaryPrompt = `Previously learned lessons for this user (avoid suggesting duplicates or very similar lessons):
+${
+  existingLessons.length > 0
+    ? existingLessons.map((l) => `- ${l}`).join("\n")
+    : "None"
+}
+
+Analyze ONLY the following NEW conversation to determine if ANY new, non-duplicate lesson can be learned:
+${messages.map((m) => `${m.role}: ${m.content}`).join("\n")}`;
+
+        const { object: preliminaryData } = await generateObject({
+          model: openai("gpt-4.1-nano"),
+          schema: preliminaryLessonCheckSchema,
+          prompt: preliminaryPrompt,
+          system: PRELIMINARY_LESSON_CHECK_SYSTEM_PROMPT,
+          temperature: 0.1,
+        });
+
+        console.log("Preliminary lesson check data:", preliminaryData);
+
+        if (preliminaryData.lesson_exists) {
+          const detailedPrompt = `Previously learned lessons for this user (ensure your new lesson is distinct and not a repeat):
+${
+  existingLessons.length > 0
+    ? existingLessons.map((l) => `- ${l}`).join("\n")
+    : "None"
+}
+
+Analyze ONLY the following NEW conversation and extract a NEW, non-duplicate interaction lesson string. If no new lesson, return an empty string or a short phrase like "No new lesson.":
+${messages.map((m) => `${m.role}: ${m.content}`).join("\n")}`;
+
+          const { object: lessonData } = await generateObject({
+            model: openai("gpt-4.1-nano"),
+            schema: lessonSchema,
+            prompt: detailedPrompt,
+            system: LESSON_EXTRACTION_SYSTEM_PROMPT,
+            temperature: 0.2,
+          });
+
+          console.log("Extracted lesson data (simplified):", lessonData);
+
+          const newLessonDescription = lessonData.lessons_description?.trim();
+
+          // Check if a meaningful, new lesson description was returned
+          if (
+            newLessonDescription &&
+            newLessonDescription !== "" &&
+            !["no new lesson", "no lesson"].includes(
+              newLessonDescription.toLowerCase()
+            )
+          ) {
+            // Check for simple duplication locally as a safeguard
+            if (existingLessons.includes(newLessonDescription)) {
+              console.log(
+                "Skipping save: Lesson already exists (local check).",
+                newLessonDescription
+              );
+              lessonExtractionError = "Lesson already exists (local check).";
+            } else {
+              const updatedLessons = [...existingLessons, newLessonDescription];
+
+              if (currentSettingsId) {
+                // Update existing row
+                const { error: updateError } = await supabase
+                  .from("assistant_settings")
+                  .update({ interaction_lessons: updatedLessons })
+                  .eq("id", currentSettingsId);
+                if (updateError) {
+                  console.error(
+                    "Error updating assistant_settings:",
+                    updateError
+                  );
+                  lessonExtractionError =
+                    "Failed to save interaction lesson (update).";
+                } else {
+                  console.log(
+                    "Interaction lesson updated for auth_id:",
+                    auth_id,
+                    newLessonDescription
+                  );
+                  lessonSaved = true;
+                }
+              } else {
+                // Insert new row
+                const { error: insertError } = await supabase
+                  .from("assistant_settings")
+                  .insert({
+                    auth_id: auth_id,
+                    interaction_lessons: updatedLessons,
+                  });
+                if (insertError) {
+                  console.error(
+                    "Error inserting new assistant_settings:",
+                    insertError
+                  );
+                  lessonExtractionError =
+                    "Failed to save interaction lesson (insert).";
+                } else {
+                  console.log(
+                    "Interaction lesson inserted for auth_id:",
+                    auth_id,
+                    newLessonDescription
+                  );
+                  lessonSaved = true;
+                }
+              }
+            }
+          } else {
+            console.log(
+              "No new, actionable lesson was extracted or it was a non-lesson phrase."
+            );
+            // lessonExtractionError can be set here if desired, e.g., "No new lesson found by AI."
+          }
+        } else {
+          console.log(
+            "Preliminary check indicated no potential new lesson. Skipping detailed extraction."
+          );
+          preliminaryCheckSkippedDetailedExtraction = true;
+        }
+      } catch (e: unknown) {
+        console.error("Error during lesson extraction or saving:", e);
+        if (e instanceof Error) {
+          lessonExtractionError = e.message;
+        } else if (typeof e === "string") {
+          lessonExtractionError = e;
+        } else {
+          lessonExtractionError =
+            "An unexpected error occurred during lesson processing.";
+        }
       }
+    } else if (!lessonExtractionError) {
+      // If auth_id was null and no prior error was set
+      lessonExtractionError =
+        "User not authenticated, skipping lesson processing.";
+      console.log("User not authenticated, skipping lesson processing.");
     }
 
     return NextResponse.json({
@@ -210,6 +280,7 @@ export async function POST(req: Request) {
       lessonExtraction: {
         processed: true,
         lessonSaved,
+        skippedDetailedExtraction: preliminaryCheckSkippedDetailedExtraction,
         error: lessonExtractionError,
       },
     });

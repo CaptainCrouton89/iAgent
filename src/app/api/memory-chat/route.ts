@@ -80,10 +80,6 @@ ${interactionLessons.map((lesson) => `- ${lesson}`).join("\n")}`;
 Right now, you are feeling: **${currentEmotion}**. Let this heavily influence your reactions, your tone, and how you engage. Don't be kind.`;
     }
 
-    console.log("currentEmotion for main prompt:", currentEmotion);
-    console.log("Interaction lessons for main prompt:", interactionLessons);
-    console.log("Using system prompt:", dynamicSystemPrompt);
-
     const result = streamText({
       model: openai("gpt-4.1"),
       temperature: 0.7,

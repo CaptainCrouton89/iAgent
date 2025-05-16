@@ -20,7 +20,7 @@ export default function MemoryChatPage() {
     messages,
     input,
     handleInputChange,
-    handleSubmit: originalHandleSubmit,
+    append,
     status,
     setMessages,
     reload,
@@ -119,14 +119,23 @@ export default function MemoryChatPage() {
     event: React.FormEvent<HTMLFormElement>
   ) => {
     event.preventDefault();
+    if (!input) return;
 
+    const newMessage: Message = {
+      id: Date.now().toString(), // Temporary ID, useChat will assign a proper one
+      role: "user" as const,
+      content: input,
+      createdAt: new Date(),
+    };
+
+    // Fetch emotion based on messages *before* adding the new one
     let newEmotion = "Neutral";
     if (messages.length > 0) {
       try {
         const emotionResponse = await fetch("/api/ai/emotion", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ messages }),
+          body: JSON.stringify({ messages }), // Current messages
         });
         if (emotionResponse.ok) {
           const emotionData = await emotionResponse.json();
@@ -143,12 +152,43 @@ export default function MemoryChatPage() {
       }
     }
 
-    originalHandleSubmit(event, {
+    // Non-blocking call to conscious thought endpoint with the new message included
+    const messagesForConsciousThought = [...messages, newMessage];
+    (async () => {
+      if (messagesForConsciousThought.length > 0) {
+        console.log("Fetching conscious thought with new message");
+        try {
+          const consciousThoughtResponse = await fetch("/api/ai/conscious", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ messages: messagesForConsciousThought }),
+          });
+          if (consciousThoughtResponse.ok) {
+            const consciousThoughtData = await consciousThoughtResponse.json();
+            console.log("Conscious thought response:", consciousThoughtData);
+          } else {
+            console.error(
+              "Failed to fetch conscious thought:",
+              await consciousThoughtResponse.text()
+            );
+          }
+        } catch (error) {
+          console.error("Error fetching conscious thought:", error);
+        }
+      }
+    })();
+
+    // Append the new message and trigger the main chat API call
+    await append(newMessage, {
       body: {
         currentEmotion: newEmotion,
         interactionLessons,
       },
     });
+
+    // Input is typically cleared by useChat after append,
+    // but if not, you might need:
+    // setInput('');
   };
 
   return (
