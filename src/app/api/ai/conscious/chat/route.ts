@@ -2,78 +2,28 @@ import { streamOpenAI } from "@/lib/chat/streamOpenAi";
 import { streamThoughts } from "@/tools/sequential-thinking";
 import OpenAI from "openai";
 import { SYSTEM_PROMPT } from "./constants";
+import {
+  inspectAndMaybeRePrompt,
+  inspectAndMaybeRePromptWithDirective,
+} from "./inspectAndReprompt";
 
 export const runtime = "edge";
-
-async function inspectAndMaybeRePromptWithDirective(
-  buffer: string
-): Promise<{ shouldRePrompt: boolean; next: string } | null> {
-  const asyncInsight = await someAsyncLogicWithDirective(buffer);
-  if (asyncInsight.shouldRePrompt) {
-    console.log(
-      "[Checkpoint] Re-prompting with instruction:",
-      asyncInsight.next
-    );
-    return {
-      shouldRePrompt: asyncInsight.shouldRePrompt,
-      next: asyncInsight.next,
-    };
-  }
-  return null; // keep going with current stream
-}
-
-async function inspectAndMaybeRePrompt(
-  buffer: string
-): Promise<{ shouldRePrompt: boolean; next: string } | null> {
-  const asyncInsight = await someAsyncLogic(buffer);
-
-  if (asyncInsight.shouldRePrompt) {
-    console.log(
-      "[Checkpoint] Re-prompting with instruction:",
-      asyncInsight.next
-    );
-    return {
-      shouldRePrompt: asyncInsight.shouldRePrompt,
-      next: asyncInsight.next,
-    };
-  }
-  return null; // keep going with current stream
-}
-
-const thoughts = ["I wonder how many apples I can fit in my mouth"];
-
-const directives = ["talk about apples", "Get angry"];
-
-let i = 0;
-let j = 0;
-async function someAsyncLogic(text: string) {
-  // You could call another API, run a tool, check DB, etc.
-  console.log("[Checkpoint] Async logic done");
-  i++;
-  i = i % thoughts.length;
-  return {
-    shouldRePrompt: text.includes("fridge magnet"), // example condition
-    next: `${thoughts[i]}`,
-  };
-}
-
-async function someAsyncLogicWithDirective(text: string) {
-  console.log("[Checkpoint] Async directive done");
-  j++;
-  j = j % directives.length;
-  return {
-    shouldRePrompt: text.includes("cantaloupe"), // example condition
-    next: `${directives[j]}`,
-  };
-}
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
 export async function POST(req: Request) {
-  const { prompt: initialPrompt } = await req.json();
+  const { messages: initialMessageHistory } = await req.json();
 
-  const thoughtsStream = streamThoughts(initialPrompt);
+  const lastFiveMessages = initialMessageHistory
+    .slice(-5)
+    .map(
+      (m: OpenAI.Chat.Completions.ChatCompletionMessageParam) =>
+        `role: ${m.role}\ncontent: ${m.content}`
+    )
+    .join("\n");
+
+  const thoughtsStream = streamThoughts(lastFiveMessages);
   const reader = thoughtsStream.getReader();
 
   const stream = new ReadableStream({
@@ -84,7 +34,7 @@ export async function POST(req: Request) {
             role: "system",
             content: SYSTEM_PROMPT,
           },
-          { role: "user", content: initialPrompt },
+          ...initialMessageHistory,
         ];
 
       let newThoughtFromStreamAvailable = false; // Flag to signal new thoughts
@@ -127,7 +77,7 @@ export async function POST(req: Request) {
       let shouldContinueStreaming = true;
 
       console.log(
-        `[Stream] Initial user prompt: "${initialPrompt.slice(0, 100)}..."`
+        `[Stream] Initial user prompt: "${lastFiveMessages.slice(0, 100)}..."`
       );
 
       while (shouldContinueStreaming) {
