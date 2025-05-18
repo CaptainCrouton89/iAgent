@@ -6,11 +6,11 @@ import {
   inspectAndMaybeRePrompt,
   inspectAndMaybeRePromptWithDirective,
 } from "./inspectAndReprompt";
+import { processThoughtsInBackground } from "./processBackgroundThought";
 
 export const runtime = "edge";
 
 const encoder = new TextEncoder();
-const decoder = new TextDecoder();
 
 export async function POST(req: Request) {
   const { messages: initialMessageHistory } = await req.json();
@@ -37,42 +37,8 @@ export async function POST(req: Request) {
           ...initialMessageHistory,
         ];
 
-      let newThoughtFromStreamAvailable = false; // Flag to signal new thoughts
-
-      // Asynchronously process thoughts and add them to messageHistory
-      (async () => {
-        try {
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) {
-              console.log("[ThoughtsReader] Thoughts stream finished.");
-              break;
-            }
-            const thoughtChunk = decoder.decode(value, { stream: true }).trim();
-            if (thoughtChunk) {
-              messageHistory.push({
-                role: "developer",
-                content: `<internal_thought>${thoughtChunk}</internal_thought>`,
-              });
-              console.log(
-                `[ThoughtsReader] Added thought to message history: "${thoughtChunk.slice(
-                  0,
-                  100
-                )}..."`
-              );
-              newThoughtFromStreamAvailable = true; // Signal new thought
-            }
-          }
-        } catch (error) {
-          console.error(
-            "[ThoughtsReader] Error reading thoughts stream:",
-            error
-          );
-        } finally {
-          reader.releaseLock();
-          console.log("[ThoughtsReader] Reader lock released.");
-        }
-      })(); // IIFE to start processing thoughts in parallel
+      const { getNewThoughtFlag, thoughtsPromise } =
+        await processThoughtsInBackground(reader, messageHistory);
 
       let shouldContinueStreaming = true;
 
@@ -145,11 +111,11 @@ export async function POST(req: Request) {
           }
 
           if (inspectNow) {
-            if (newThoughtFromStreamAvailable) {
+            if (getNewThoughtFlag()) {
               console.log(
                 "[Stream] New thought detected from parallel stream. Triggering re-prompt."
               );
-              newThoughtFromStreamAvailable = false; // Reset the flag
+              // newThoughtFromStreamAvailable = false; // Reset the flag // Flag is reset by getNewThoughtFlag
 
               if (currentAssistantResponse.trim().length > 0) {
                 controller.enqueue(encoder.encode(" "));
@@ -246,6 +212,7 @@ export async function POST(req: Request) {
       }
 
       controller.close();
+      await thoughtsPromise; // Ensure background thought processing completes
       console.log("history", messageHistory.map((m) => m.content).join("\n"));
       console.log("[Stream] Stream closed.");
     },
