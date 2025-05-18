@@ -18,14 +18,26 @@ const lessonSchema = z.object({
   lessons_description: z
     .string()
     .optional() // Optional: AI might return nothing if no new lesson after all
-    .describe(
-      "A concise, actionable piece of advice for the main conversational agent, phrased in the second person (addressing the agent). Examples: 'When the user seems rushed, you should provide more concise answers.', 'You might want to acknowledge past points more explicitly, as the user responds well to this.', 'If the user mentions [topic X], try to recall their previous sentiment about it, as this is important to them.' If no new, distinct lesson is found, this may be empty or not present."
-    ),
+    .describe("A concise, actionable piece of advice for future interactions"),
 });
 
 const PRELIMINARY_LESSON_CHECK_SYSTEM_PROMPT = `You are an AI interaction analyst. You will be provided with a list of existing interaction lessons for a user and a new conversation with that same user.
 Your ONLY task is to determine if there is ANY potential NEW, non-duplicate lesson that a conversational AI could learn from the LATEST conversation to improve its future interactions with the user.
-Do not extract the lesson itself. Just answer true or false.
+A lesson should be a concise, actionable instruction for the AI about *how* to interact (e.g., its tone, phrasing, or communication style), not about *what* topics to discuss or abstract psychological goals.
+
+Examples of lessons (focus on interaction style/behavior):
+- "When the user seems rushed, you should provide more concise answers."
+- "You might want to acknowledge past points more explicitly, as the user responds well to this."
+- "Maintain a respectful, neutral tone; avoid pity or patronizing language."
+- "Deliver natural, flowing commentary without questions to foster idea-driven conversations."
+
+Examples of lessons that are NOT valid (avoid these types):
+- "Help the user explore and accept the emotional complexity of difficult moral dilemmas, emphasizing that feeling conflicted is normal and that patience in decision-making can be a form of strength." (This is about content/goals, not interaction style)
+- "If the user mentions [topic X], try to recall their previous sentiment about it, as this is important to them." (This is more about memory/content recall than a direct interaction style adjustment)
+
+If no new, distinct lesson focusing on interaction style is found, this may be empty or not present.
+
+Do not extract the lesson itself. Just answer true or false whether a *new stylistic/behavioral* lesson exists.
 
 Consider:
 - Explicit or implicit user preferences in the new conversation.
@@ -169,7 +181,7 @@ Analyze ONLY the following NEW conversation and extract a NEW, non-duplicate int
 ${messages.map((m) => `${m.role}: ${m.content}`).join("\n")}`;
 
           const { object: lessonData } = await generateObject({
-            model: openai("gpt-4.1-nano"),
+            model: openai("gpt-4.1"),
             schema: lessonSchema,
             prompt: detailedPrompt,
             system: LESSON_EXTRACTION_SYSTEM_PROMPT,
@@ -189,59 +201,52 @@ ${messages.map((m) => `${m.role}: ${m.content}`).join("\n")}`;
             )
           ) {
             // Check for simple duplication locally as a safeguard
-            if (existingLessons.includes(newLessonDescription)) {
-              console.log(
-                "Skipping save: Lesson already exists (local check).",
-                newLessonDescription
-              );
-              lessonExtractionError = "Lesson already exists (local check).";
-            } else {
-              const updatedLessons = [...existingLessons, newLessonDescription];
 
-              if (currentSettingsId) {
-                // Update existing row
-                const { error: updateError } = await supabase
-                  .from("assistant_settings")
-                  .update({ interaction_lessons: updatedLessons })
-                  .eq("id", currentSettingsId);
-                if (updateError) {
-                  console.error(
-                    "Error updating assistant_settings:",
-                    updateError
-                  );
-                  lessonExtractionError =
-                    "Failed to save interaction lesson (update).";
-                } else {
-                  console.log(
-                    "Interaction lesson updated for auth_id:",
-                    auth_id,
-                    newLessonDescription
-                  );
-                  lessonSaved = true;
-                }
+            const updatedLessons = [...existingLessons, newLessonDescription];
+
+            if (currentSettingsId) {
+              // Update existing row
+              const { error: updateError } = await supabase
+                .from("assistant_settings")
+                .update({ interaction_lessons: updatedLessons })
+                .eq("id", currentSettingsId);
+              if (updateError) {
+                console.error(
+                  "Error updating assistant_settings:",
+                  updateError
+                );
+                lessonExtractionError =
+                  "Failed to save interaction lesson (update).";
               } else {
-                // Insert new row
-                const { error: insertError } = await supabase
-                  .from("assistant_settings")
-                  .insert({
-                    auth_id: auth_id,
-                    interaction_lessons: updatedLessons,
-                  });
-                if (insertError) {
-                  console.error(
-                    "Error inserting new assistant_settings:",
-                    insertError
-                  );
-                  lessonExtractionError =
-                    "Failed to save interaction lesson (insert).";
-                } else {
-                  console.log(
-                    "Interaction lesson inserted for auth_id:",
-                    auth_id,
-                    newLessonDescription
-                  );
-                  lessonSaved = true;
-                }
+                console.log(
+                  "Interaction lesson updated for auth_id:",
+                  auth_id,
+                  newLessonDescription
+                );
+                lessonSaved = true;
+              }
+            } else {
+              // Insert new row
+              const { error: insertError } = await supabase
+                .from("assistant_settings")
+                .insert({
+                  auth_id: auth_id,
+                  interaction_lessons: updatedLessons,
+                });
+              if (insertError) {
+                console.error(
+                  "Error inserting new assistant_settings:",
+                  insertError
+                );
+                lessonExtractionError =
+                  "Failed to save interaction lesson (insert).";
+              } else {
+                console.log(
+                  "Interaction lesson inserted for auth_id:",
+                  auth_id,
+                  newLessonDescription
+                );
+                lessonSaved = true;
               }
             }
           } else {

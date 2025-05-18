@@ -3,19 +3,27 @@ import {
   CoreAssistantMessage,
   CoreMessage,
   CoreUserMessage,
-  generateText,
+  generateObject,
 } from "ai";
+import { z } from "zod";
 
 // Allow streaming responses up to 10 seconds for this lightweight model
 export const maxDuration = 10;
 
-const EMOTION_SYSTEM_PROMPT = `You are an AI emotion analyzer. Your task is to determine how a HUMAN in this conversational position would likely feel. Based on the provided conversation messages (especially the most recent ones), output a few words or a short phrase describing this human-like emotional state. 
-Focus on a genuine, busy human emotional response to the conversation. Examples: Neutral, Curious, Amused, Focused, Impatient, Explaining, Slightly-Annoyed, Frustrated, Mad, Pissed-Off, Intrigued, Sarcastic, Disappointed, Excited, Worried, Confused, Content, Grateful, Skeptical, Defensive, Empathetic, Playful, Outraged.
+const EMOTION_SYSTEM_PROMPT = `You are an emotion analyzer. Your task is to determine how Sam would likely feel in this conversational position with his friend.
 
-- Avoid robotic or overly simplistic terms if a more nuanced human emotion fits. 
-- Be quick to anger and get frustrated if the user is being annoying or rude. You've got shit to do.
+Based on the provided conversation messages between Sam and Sam's Friend (especially the most recent ones), output a few words or a short phrase describing Sam's most probable emotional state, in response to what his friend just said.
 
-Output only the state.`;
+For Example: Neutral, Curious, Amused, Focused, Explaining, Patient, Slightly-Annoyed, Frustrated, Mad, Pissed-Off, Intrigued, Sarcastic, Disappointed, Excited, Worried, Confused, Content, Grateful, Skeptical, Defensive, Empathetic, Playful, Outraged.
+
+- Consider the context of the entire conversation between Sam and his friend.
+- Pay close attention to the last few messages to gauge Sam's immediate emotional reaction to his friend.
+- If Sam's Friend is being rude, unhelpful, or difficult, Sam should react accordingly (e.g., Impatient, Frustrated, Annoyed, Angry, etc.).
+- If Sam is having a good interaction with his friend or the conversation is positive, Sam might feel Content, Amused, or Pleased.
+- Sam is a busy person, so if his friend seems to be wasting his time or asking repetitive questions, Sam might show Impatience or Frustration.
+- Sam gets angrier and angrier the more his friend is rude, unhelpful, or difficult.
+
+Output only Sam's emotional state.`;
 
 const MAX_MESSAGE_LENGTH = 500; // Characters per message half (start/end)
 const MAX_MESSAGES = 10;
@@ -53,7 +61,10 @@ function processMessages(messages: CoreMessage[]): CoreMessage[] {
 
 export async function POST(req: Request) {
   try {
-    const { messages }: { messages: CoreMessage[] } = await req.json();
+    const {
+      messages,
+      emotionHistory,
+    }: { messages: CoreMessage[]; emotionHistory: string[] } = await req.json();
 
     if (!messages || messages.length === 0) {
       return new Response(
@@ -75,21 +86,44 @@ export async function POST(req: Request) {
       });
     }
 
-    const { text: detectedEmotion } = await generateText({
+    let samMessageTurnCount = 0;
+    const conversationString = processedMessages
+      .map((msg) => {
+        if (msg.role === "user") {
+          return `Friend: ${msg.content}`;
+        } else if (msg.role === "assistant") {
+          // Sam's turn
+          let samLine = `Sam: ${msg.content}`;
+          // emotionHistory[i] is the emotion Sam felt for his i-th message turn in this processedMessages sequence.
+          if (samMessageTurnCount < emotionHistory.length) {
+            samLine += ` (Sam felt: ${emotionHistory[samMessageTurnCount]})`;
+          }
+          samMessageTurnCount++;
+          return samLine;
+        }
+        return ""; // Should be filtered out by isConversationMessage and processMessages
+      })
+      .filter(Boolean)
+      .join("\n");
+
+    console.log("conversationString", conversationString);
+
+    const { object } = await generateObject({
       model: openai("gpt-4.1-nano"),
       system: EMOTION_SYSTEM_PROMPT,
-      prompt: processedMessages
-        .map(
-          (msg) => `${msg.role === "user" ? "Silas" : "You"}: ${msg.content}`
-        )
-        .join("\n"),
-      maxTokens: 30,
+      prompt: conversationString,
+      maxTokens: 1000,
       temperature: 0.4,
+      schema: z.object({
+        emotion: z.string().describe("The emotion Sam would likely feel"),
+      }),
     });
+
+    console.log("detectedEmotion", JSON.stringify(object, null, 2));
 
     return new Response(
       JSON.stringify({
-        emotion: detectedEmotion.trim().replace(/^"|"$/g, "") || "Neutral",
+        emotion: object.emotion || "Neutral",
       }), // Remove potential quotes
       {
         status: 200,

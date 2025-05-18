@@ -65,6 +65,18 @@ export function EditableMessage({
       Neutral: "bg-muted",
       Confused: "bg-purple-100 border-purple-200",
       Thoughtful: "bg-indigo-100 border-indigo-200",
+      Curious: "bg-orange-100 border-orange-200",
+      Amused: "bg-pink-100 border-pink-200",
+      Focused: "bg-teal-100 border-teal-200",
+      Explaining: "bg-gray-100 border-gray-200",
+      Patient: "bg-lime-100 border-lime-200",
+      SlightlyAnnoyed: "bg-amber-100 border-amber-200",
+      Frustrated: "bg-red-100 border-red-200",
+      Mad: "bg-red-100 border-red-200",
+      PissedOff: "bg-red-100 border-red-200",
+      Intrigued: "bg-purple-100 border-purple-200",
+      Sarcastic: "bg-gray-100 border-gray-200",
+      Disappointed: "bg-gray-100 border-gray-200",
     };
     return styles[emotion] || styles.Neutral;
   };

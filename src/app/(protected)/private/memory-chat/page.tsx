@@ -8,7 +8,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Message, useChat } from "@ai-sdk/react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ChatContainer, ChatInput, SaveConversationButton } from "./components";
 
 interface SystemInfoArgs {
@@ -24,6 +24,7 @@ export default function MemoryChatPage() {
     status,
     setMessages,
     reload,
+    setInput,
   } = useChat({
     api: "/api/memory-chat",
     maxSteps: 5,
@@ -36,7 +37,7 @@ export default function MemoryChatPage() {
   });
 
   const [interactionLessons, setInteractionLessons] = useState<string[]>([]);
-  const [currentEmotion, setCurrentEmotion] = useState<string>("Neutral");
+  const [emotionHistory, setEmotionHistory] = useState<string[]>([]);
 
   useEffect(() => {
     const fetchLessons = async () => {
@@ -88,13 +89,16 @@ export default function MemoryChatPage() {
       const emotionResponse = await fetch("/api/ai/emotion", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: messagesForReload }), // Use the updated messages for emotion detection
+        body: JSON.stringify({
+          messages: messagesForReload,
+          emotionHistory: emotionHistory.slice(0, messageIndex),
+        }), // Use the updated messages for emotion detection
       });
 
       if (emotionResponse.ok) {
         const data = await emotionResponse.json();
         newEmotion = data.emotion || "Neutral";
-        setCurrentEmotion(newEmotion);
+        setEmotionHistory([...emotionHistory, newEmotion]);
       }
     } catch (error) {
       console.error("Error fetching emotion:", error);
@@ -115,32 +119,35 @@ export default function MemoryChatPage() {
     }
   };
 
-  const handleSubmitWithEmotion = async (
-    event: React.FormEvent<HTMLFormElement>
-  ) => {
-    event.preventDefault();
-    if (!input) return;
+  const handleSubmitWithEmotion = useCallback(
+    async (event: React.FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      if (!input) return;
 
-    const newMessage: Message = {
-      id: Date.now().toString(), // Temporary ID, useChat will assign a proper one
-      role: "user" as const,
-      content: input,
-      createdAt: new Date(),
-    };
+      const newMessage: Message = {
+        id: Date.now().toString(), // Temporary ID, useChat will assign a proper one
+        role: "user" as const,
+        content: input,
+        createdAt: new Date(),
+      };
+      setInput("");
+      const allMessages = [...messages, newMessage];
 
-    // Fetch emotion based on messages *before* adding the new one
-    let newEmotion = "Neutral";
-    if (messages.length > 0) {
+      // Fetch emotion based on messages *after* adding the new one
+      let newEmotion = "Neutral";
       try {
         const emotionResponse = await fetch("/api/ai/emotion", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ messages }), // Current messages
+          body: JSON.stringify({
+            messages: allMessages,
+            emotionHistory,
+          }), // Current messages
         });
         if (emotionResponse.ok) {
           const emotionData = await emotionResponse.json();
           newEmotion = emotionData.emotion || "Neutral";
-          setCurrentEmotion(newEmotion);
+          setEmotionHistory([...emotionHistory, newEmotion]);
         } else {
           console.error(
             "Failed to fetch emotion:",
@@ -150,18 +157,16 @@ export default function MemoryChatPage() {
       } catch (error) {
         console.error("Error fetching emotion:", error);
       }
-    }
 
-    // Non-blocking call to conscious thought endpoint with the new message included
-    const messagesForConsciousThought = [...messages, newMessage];
-    (async () => {
-      if (messagesForConsciousThought.length > 0) {
+      // Non-blocking call to conscious thought endpoint with the new message included
+
+      (async () => {
         console.log("Fetching conscious thought with new message");
         try {
           const consciousThoughtResponse = await fetch("/api/ai/conscious", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ messages: messagesForConsciousThought }),
+            body: JSON.stringify({ messages: allMessages }),
           });
           if (consciousThoughtResponse.ok) {
             const consciousThoughtData = await consciousThoughtResponse.json();
@@ -175,21 +180,26 @@ export default function MemoryChatPage() {
         } catch (error) {
           console.error("Error fetching conscious thought:", error);
         }
-      }
-    })();
+      })();
 
-    // Append the new message and trigger the main chat API call
-    await append(newMessage, {
-      body: {
-        currentEmotion: newEmotion,
-        interactionLessons,
-      },
-    });
-
-    // Input is typically cleared by useChat after append,
-    // but if not, you might need:
-    // setInput('');
-  };
+      // Append the new message and trigger the main chat API call
+      await append(newMessage, {
+        body: {
+          currentEmotion: newEmotion,
+          interactionLessons,
+        },
+      });
+    },
+    [
+      input,
+      messages,
+      interactionLessons,
+      append,
+      setInput,
+      emotionHistory,
+      setEmotionHistory,
+    ]
+  );
 
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] bg-gray-50 container mx-auto">
@@ -203,7 +213,7 @@ export default function MemoryChatPage() {
             messages={messages}
             isLoading={status !== "ready"}
             onEditMessage={handleEditMessage}
-            currentEmotion={currentEmotion}
+            currentEmotion={emotionHistory[emotionHistory.length - 1]}
           />
         </CardContent>
         <CardFooter className="p-4 border-t">

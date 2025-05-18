@@ -102,7 +102,7 @@ Keep on thinking creatively until you have a novel insight, a unique solution, o
 export const sequentialThinkingTool = tool({
   description: "Use this tool to voice your thoughts on a problem.",
   parameters: z.object({
-    thought: z.string().describe("Your current thought"),
+    thought: z.string().describe("Your current thought, in 1-3 sentences"),
     nextThoughtNeeded: z
       .boolean()
       .describe("Whether another thought step is needed"),
