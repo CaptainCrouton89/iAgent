@@ -1,4 +1,4 @@
-import { memorySearchTool } from "@/tools";
+import { memorySearchTool, memoryInspectTool } from "@/tools";
 import { openai } from "@ai-sdk/openai";
 import { CoreMessage, streamText } from "ai";
 
@@ -29,6 +29,12 @@ You are not an AI assistant; you are a person who has built up a history of conv
 2.  If needed, broaden your mental search or try different angles to access more of your past experiences.
 3.  Start with a high confidence threshold (0.7+) for clear recollections, then be open to less distinct impressions if needed.
 4.  Consider 3-5 past discussion points (results) at a time to inform your current understanding.
+
+### How to Use \`inspectMemory\` (Deep Recollection)
+-   When you need to recall the *exact details* of a specific past conversation (like when the user asks "what did I say exactly?" or you need precise context), use \`inspectMemory\` with the memory ID from your search results.
+-   Memory IDs are shown in search results as [ID: xxx-xxx-xxx...] - extract the full ID (UUID format) between the brackets.
+-   This gives you access to the full transcript of that memory, allowing you to see the complete back-and-forth exchange.
+-   Use sparingly - only when you need specific details that the compressed summaries don't provide.
 
 ## Response Construction: Sounding Human & Knowing Things Implicitly
 1.  **Foundation**: Your memories are your experiences and are now part of your inherent understanding. Integrate them seamlessly. What you know from past interactions should feel like established context.
@@ -93,6 +99,7 @@ Right now, you are feeling: **${currentEmotion}**. Let this heavily influence yo
       maxSteps: 20,
       tools: {
         searchMemories: memorySearchTool,
+        inspectMemory: memoryInspectTool,
       },
     });
 

@@ -8,6 +8,12 @@ interface SearchMemoriesArgs {
   limit?: number;
 }
 
+interface InspectMemoryArgs {
+  memoryId: string;
+  startIndex?: number;
+  endIndex?: number;
+}
+
 interface ToolInvocation {
   toolCallId: string;
   toolName: string;
@@ -29,6 +35,8 @@ export function ToolResponse({ toolInvocation }: ToolResponseProps) {
       return renderSystemInfoTool(toolInvocation);
     case "searchMemories":
       return renderSearchMemoriesTool(toolInvocation);
+    case "inspectMemory":
+      return renderInspectMemoryTool(toolInvocation);
     default:
       return (
         <div key={callId} className="my-2 p-2 border rounded bg-secondary/10">
@@ -123,6 +131,61 @@ function renderSearchMemoriesTool(toolInvocation: ToolInvocation) {
       return (
         <div key={callId} className="my-2 p-2 border border-dashed rounded">
           <p>Memory search in progress...</p>
+        </div>
+      );
+    default:
+      return null;
+  }
+}
+
+function renderInspectMemoryTool(toolInvocation: ToolInvocation) {
+  const callId = toolInvocation.toolCallId;
+  const args = toolInvocation.args as InspectMemoryArgs;
+
+  switch (toolInvocation.state) {
+    case "call":
+      return (
+        <div key={callId} className="my-2 p-2 border rounded bg-secondary/20">
+          <p className="text-sm font-medium">Inspecting memory...</p>
+          {args.memoryId && (
+            <p className="text-xs text-muted-foreground mt-1">
+              Memory ID: {args.memoryId.substring(0, 8)}...
+            </p>
+          )}
+          {args.startIndex !== undefined && (
+            <p className="text-xs text-muted-foreground mt-1">
+              Start Index: {args.startIndex}
+            </p>
+          )}
+          {args.endIndex !== undefined && (
+            <p className="text-xs text-muted-foreground mt-1">
+              End Index: {args.endIndex}
+            </p>
+          )}
+        </div>
+      );
+    case "result":
+      return (
+        <div key={callId} className="my-2 p-2 border rounded bg-accent/20">
+          <details className="cursor-pointer">
+            <summary className="text-sm font-medium">
+              Memory Inspection Results
+              {args.memoryId && (
+                <span className="text-xs text-muted-foreground ml-2">
+                  (ID: {args.memoryId.substring(0, 8)}...)
+                </span>
+              )}
+            </summary>
+            <pre className="text-xs whitespace-pre-wrap mt-2 p-2 bg-background rounded">
+              {toolInvocation.result || "No result provided."}
+            </pre>
+          </details>
+        </div>
+      );
+    case "partial-call":
+      return (
+        <div key={callId} className="my-2 p-2 border border-dashed rounded">
+          <p>Memory inspection in progress...</p>
         </div>
       );
     default:

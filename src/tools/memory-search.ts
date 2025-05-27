@@ -50,7 +50,7 @@ export const memorySearchTool = tool({
           }
           // Fallbacks to memory.content are removed as per user request
 
-          return `Memory ${index + 1} (${formatRelativeTime(
+          return `Memory ${index + 1} [ID: ${memory.id}] (${formatRelativeTime(
             memory.created_at
           )}) - Relevance: ${Math.round(
             memory.similarity * 100
