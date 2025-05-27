@@ -1,6 +1,6 @@
 import { SupabaseClient } from "@supabase/supabase-js";
 import { v4 as uuidv4 } from "uuid";
-import { Database } from "../../../supabase/database.types";
+import { Database } from "@/utils/supabase/database.types";
 
 export type Context = Database["public"]["Tables"]["contexts"]["Row"];
 export type ContextInsert = Database["public"]["Tables"]["contexts"]["Insert"];

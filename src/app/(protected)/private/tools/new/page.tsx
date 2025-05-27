@@ -12,7 +12,6 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -30,7 +29,6 @@ import { useState } from "react";
 export default function NewToolPage() {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [isAsync, setIsAsync] = useState(false);
   const [inputSchema, setInputSchema] = useState<Json>({
     type: "object",
     properties: {
@@ -61,19 +59,6 @@ async function execute(args, agentId) {
 
 // Return the execution result
 return await execute(args, agentId);`);
-
-  const [syncToolCode, setSyncToolCode] =
-    useState(`// This code runs synchronously during LLM processing (optional)
-// It should return JSON that the LLM can directly use
-// It should be fast and simple
-
-function syncTool(args) {
-  return {
-    result: \`Quick response for \${args.query}\`,
-  };
-}
-
-return syncTool(args);`);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -112,8 +97,6 @@ return syncTool(args);`);
         description,
         input_schema: parsedSchema,
         execute_code: executeCode,
-        sync_tool_code: syncToolCode || null,
-        is_async: isAsync,
       };
 
       // Create the custom tool
@@ -171,15 +154,6 @@ return syncTool(args);`);
                   rows={3}
                 />
               </div>
-
-              <div className="flex items-center space-x-2">
-                <Switch
-                  id="async"
-                  checked={isAsync}
-                  onCheckedChange={setIsAsync}
-                />
-                <Label htmlFor="async">Asynchronous Tool</Label>
-              </div>
             </CardContent>
           </Card>
 
@@ -215,9 +189,6 @@ return syncTool(args);`);
                   <TabsTrigger value="execute">
                     Execute Code (Required)
                   </TabsTrigger>
-                  <TabsTrigger value="sync">
-                    Sync Tool Code (Optional)
-                  </TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="execute">
@@ -230,22 +201,6 @@ return syncTool(args);`);
                     <CodeEditor
                       value={executeCode}
                       onChange={setExecuteCode}
-                      language="javascript"
-                      height="300px"
-                    />
-                  </div>
-                </TabsContent>
-
-                <TabsContent value="sync">
-                  <div className="space-y-2">
-                    <p className="text-sm text-muted-foreground mb-2">
-                      This optional code runs synchronously during LLM
-                      processing. It should be fast and simple, returning data
-                      the LLM can use directly.
-                    </p>
-                    <CodeEditor
-                      value={syncToolCode}
-                      onChange={setSyncToolCode}
                       language="javascript"
                       height="300px"
                     />

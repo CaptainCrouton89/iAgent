@@ -4,10 +4,10 @@ import { NextRequest, NextResponse } from "next/server";
 // Get a specific agent by ID
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = params;
+    const { id } = await params;
     const supabase = await createClient();
 
     // Check authentication
@@ -54,10 +54,10 @@ export async function GET(
 // Update an agent
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = params;
+    const { id } = await params;
     const supabase = await createClient();
 
     // Check authentication
@@ -126,10 +126,10 @@ export async function PUT(
 // Delete an agent
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = params;
+    const { id } = await params;
     const supabase = await createClient();
 
     // Check authentication

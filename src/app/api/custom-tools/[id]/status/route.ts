@@ -4,9 +4,10 @@ import { NextRequest, NextResponse } from "next/server";
 
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const supabase = await createClient();
 
     // Check authentication
@@ -30,7 +31,7 @@ export async function PATCH(
 
     // Update the tool status
     const updatedTool = await toggleCustomToolStatus(
-      params.id,
+      id,
       body.is_active,
       supabase
     );

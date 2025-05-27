@@ -53,7 +53,6 @@ export async function createCustomTool(
         name: formData.name,
         description: formData.description,
         input_schema: formData.input_schema,
-        is_async: formData.is_async || false,
         is_active: true,
       })
       .select()
@@ -70,7 +69,6 @@ export async function createCustomTool(
       .insert({
         tool_id: toolData.id,
         execute_code: formData.execute_code,
-        sync_tool_code: formData.sync_tool_code || null,
         is_current_version: true,
         version: 1,
       });
@@ -180,7 +178,6 @@ export async function updateTool(
         name: formData.name,
         description: formData.description,
         input_schema: formData.input_schema,
-        is_async: formData.is_async || false,
         updated_at: new Date().toISOString(),
       })
       .eq("id", toolId);
@@ -196,7 +193,6 @@ export async function updateTool(
       .insert({
         tool_id: toolId,
         execute_code: formData.execute_code,
-        sync_tool_code: formData.sync_tool_code || null,
         is_current_version: true,
         // version will be set by the trigger
       });

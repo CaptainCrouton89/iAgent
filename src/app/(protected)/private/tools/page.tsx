@@ -158,9 +158,6 @@ export default function ToolsPage() {
                   <CardHeader>
                     <div className="flex justify-between items-start">
                       <CardTitle className="text-lg">{tool.name}</CardTitle>
-                      <Badge variant={tool.is_async ? "secondary" : "outline"}>
-                        {tool.is_async ? "Async" : "Sync"}
-                      </Badge>
                     </div>
                     <CardDescription>{tool.description}</CardDescription>
                   </CardHeader>

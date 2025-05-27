@@ -9,9 +9,10 @@ import { NextRequest, NextResponse } from "next/server";
 // GET: Get a single tool with its current implementation
 export async function GET(
   _req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const supabase = await createClient();
 
     // Check authentication
@@ -27,7 +28,7 @@ export async function GET(
 
     // Get the tool with its implementation
     const toolWithImplementation = await getCustomToolWithImplementation(
-      params.id,
+      id,
       supabase
     );
 
@@ -54,9 +55,10 @@ export async function GET(
 // PUT: Update a tool and its implementation
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const supabase = await createClient();
 
     // Check authentication
@@ -72,7 +74,7 @@ export async function PUT(
 
     // Get the tool first to check ownership
     const toolWithImplementation = await getCustomToolWithImplementation(
-      params.id,
+      id,
       supabase
     );
 
@@ -106,7 +108,7 @@ export async function PUT(
     }
 
     // Update the tool
-    const updatedTool = await updateCustomTool(params.id, formData, supabase);
+    const updatedTool = await updateCustomTool(id, formData, supabase);
 
     return NextResponse.json(updatedTool);
   } catch (error) {
@@ -121,9 +123,10 @@ export async function PUT(
 // DELETE: Delete a tool
 export async function DELETE(
   _req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const supabase = await createClient();
 
     // Check authentication
@@ -141,7 +144,7 @@ export async function DELETE(
     const { data: tool, error } = await supabase
       .from("custom_tools")
       .select("owner")
-      .eq("id", params.id)
+      .eq("id", id)
       .single();
 
     if (error) {
@@ -154,7 +157,7 @@ export async function DELETE(
     }
 
     // Delete the tool
-    await deleteCustomTool(params.id, supabase);
+    await deleteCustomTool(id, supabase);
 
     return NextResponse.json({ success: true });
   } catch (error) {

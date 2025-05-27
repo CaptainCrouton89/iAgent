@@ -1,6 +1,6 @@
 import { SupabaseClient } from "@supabase/supabase-js";
 import { v4 as uuidv4 } from "uuid";
-import { Database } from "../../../supabase/database.types";
+import { Database } from "@/utils/supabase/database.types";
 
 export type Agent = Database["public"]["Tables"]["agents"]["Row"];
 export type AgentInsert = Database["public"]["Tables"]["agents"]["Insert"];

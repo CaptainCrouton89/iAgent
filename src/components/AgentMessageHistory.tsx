@@ -1,6 +1,7 @@
 import React from "react";
-import { MessageRole } from "../deprecated/agentMessageService";
 import { useAgentMessages } from "../hooks/useAgentMessages";
+
+type MessageRole = "user" | "assistant" | "system";
 
 interface AgentMessageHistoryProps {
   agentId: string;

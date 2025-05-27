@@ -1,24 +1,101 @@
-import { Database, Json } from "@/utils/supabase/database.types";
+import { Json } from "@/utils/supabase/database.types";
 import { SupabaseClient } from "@supabase/supabase-js";
 import { v4 as uuidv4 } from "uuid";
 
-export type CustomTool = Database["public"]["Tables"]["custom_tools"]["Row"];
-export type CustomToolInsert =
-  Database["public"]["Tables"]["custom_tools"]["Insert"];
-export type CustomToolUpdate =
-  Database["public"]["Tables"]["custom_tools"]["Update"];
+// Temporary type definitions until database types are updated
+export interface CustomTool {
+  id: string;
+  owner: string;
+  name: string;
+  description: string;
+  input_schema: Json;
+  metadata: Json | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
 
-export type CustomToolImplementation =
-  Database["public"]["Tables"]["custom_tool_implementations"]["Row"];
-export type CustomToolImplementationInsert =
-  Database["public"]["Tables"]["custom_tool_implementations"]["Insert"];
-export type CustomToolImplementationUpdate =
-  Database["public"]["Tables"]["custom_tool_implementations"]["Update"];
+export interface CustomToolInsert {
+  id?: string;
+  owner: string;
+  name: string;
+  description: string;
+  input_schema: Json;
+  metadata?: Json | null;
+  is_active?: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
 
-export type CustomToolExecution =
-  Database["public"]["Tables"]["custom_tool_executions"]["Row"];
-export type CustomToolExecutionInsert =
-  Database["public"]["Tables"]["custom_tool_executions"]["Insert"];
+export interface CustomToolUpdate {
+  name?: string;
+  description?: string;
+  input_schema?: Json;
+  metadata?: Json | null;
+  is_active?: boolean;
+  updated_at?: string;
+}
+
+export interface CustomToolImplementation {
+  id: string;
+  tool_id: string;
+  version: number;
+  input_schema: Json;
+  execute_code: string;
+  output_schema: Json | null;
+  requires_api_keys: string[] | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CustomToolImplementationInsert {
+  id?: string;
+  tool_id: string;
+  version?: number;
+  input_schema: Json;
+  execute_code: string;
+  output_schema?: Json | null;
+  requires_api_keys?: string[] | null;
+  is_active?: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface CustomToolImplementationUpdate {
+  input_schema?: Json;
+  execute_code?: string;
+  output_schema?: Json | null;
+  requires_api_keys?: string[] | null;
+  is_active?: boolean;
+  updated_at?: string;
+}
+
+export interface CustomToolExecution {
+  id: string;
+  implementation_id: string;
+  executed_by: string;
+  agent_id: string | null;
+  input: Json;
+  output: Json | null;
+  success: boolean;
+  error_message: string | null;
+  execution_time_ms: number | null;
+  created_at: string;
+}
+
+export interface CustomToolExecutionInsert {
+  id?: string;
+  implementation_id: string;
+  executed_by: string;
+  agent_id?: string | null;
+  input: Json;
+  output?: Json | null;
+  success: boolean;
+  error_message?: string | null;
+  execution_time_ms?: number | null;
+  created_at?: string;
+}
 
 export interface CustomToolWithImplementation {
   tool: CustomTool;
@@ -30,8 +107,8 @@ export interface CustomToolFormData {
   description: string;
   input_schema: Json;
   execute_code: string;
-  sync_tool_code?: string | null;
-  is_async?: boolean;
+  output_schema?: Json;
+  requires_api_keys?: string[];
 }
 
 // Get all custom tools for the current user
@@ -49,99 +126,42 @@ export async function getCustomTools(supabaseClient: SupabaseClient) {
   return tools;
 }
 
-// Get a single custom tool by ID
-export async function getCustomToolById(
-  id: string,
-  supabaseClient: SupabaseClient
-) {
-  const { data: tool, error } = await supabaseClient
-    .from("custom_tools")
-    .select("*")
-    .eq("id", id)
-    .single();
-
-  if (error) {
-    console.error("Error fetching custom tool:", error);
-    throw new Error("Failed to fetch custom tool");
-  }
-
-  return tool;
-}
-
 // Get a custom tool with its current implementation
 export async function getCustomToolWithImplementation(
-  id: string,
+  toolId: string,
   supabaseClient: SupabaseClient
 ): Promise<CustomToolWithImplementation | null> {
-  // Get the custom tool
+  // First get the tool
   const { data: tool, error: toolError } = await supabaseClient
     .from("custom_tools")
     .select("*")
-    .eq("id", id)
+    .eq("id", toolId)
     .single();
 
-  if (toolError) {
-    console.error("Error fetching custom tool:", toolError);
-    throw new Error("Failed to fetch custom tool");
+  if (toolError || !tool) {
+    console.error("Error fetching tool:", toolError);
+    return null;
   }
 
-  // Get the current implementation
+  // Then get the active implementation
   const { data: implementation, error: implError } = await supabaseClient
     .from("custom_tool_implementations")
     .select("*")
-    .eq("tool_id", id)
-    .eq("is_current_version", true)
+    .eq("tool_id", toolId)
+    .eq("is_active", true)
+    .order("version", { ascending: false })
+    .limit(1)
     .single();
 
-  if (implError) {
+  if (implError || !implementation) {
     console.error("Error fetching implementation:", implError);
-    throw new Error("Failed to fetch tool implementation");
+    return null;
   }
 
   return {
     tool,
     implementation,
   };
-}
-
-// Get all implementations for a custom tool
-export async function getCustomToolImplementations(
-  toolId: string,
-  supabaseClient: SupabaseClient
-) {
-  const { data: implementations, error } = await supabaseClient
-    .from("custom_tool_implementations")
-    .select("*")
-    .eq("tool_id", toolId)
-    .order("version", { ascending: false });
-
-  if (error) {
-    console.error("Error fetching implementations:", error);
-    throw new Error("Failed to fetch tool implementations");
-  }
-
-  return implementations;
-}
-
-// Get execution history for a custom tool
-export async function getCustomToolExecutions(
-  toolId: string,
-  supabaseClient: SupabaseClient,
-  limit = 10
-) {
-  const { data: executions, error } = await supabaseClient
-    .from("custom_tool_executions")
-    .select("*")
-    .eq("tool_id", toolId)
-    .order("created_at", { ascending: false })
-    .limit(limit);
-
-  if (error) {
-    console.error("Error fetching tool executions:", error);
-    throw new Error("Failed to fetch tool executions");
-  }
-
-  return executions;
 }
 
 // Create a new custom tool
@@ -157,18 +177,19 @@ export async function createCustomTool(
   }
 
   const toolId = uuidv4();
+  const now = new Date().toISOString();
 
-  // First create the tool
+  // Create the tool
   const newTool: CustomToolInsert = {
     id: toolId,
+    owner: userData.user.id,
     name: formData.name,
     description: formData.description,
     input_schema: formData.input_schema,
-    is_async: formData.is_async || false,
+    metadata: null,
     is_active: true,
-    owner: userData.user.id,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
+    created_at: now,
+    updated_at: now,
   };
 
   const { data: tool, error: toolError } = await supabaseClient
@@ -177,116 +198,161 @@ export async function createCustomTool(
     .select()
     .single();
 
-  if (toolError) {
-    console.error("Error creating custom tool:", toolError);
-    throw new Error("Failed to create custom tool");
+  if (toolError || !tool) {
+    console.error("Error creating tool:", toolError);
+    throw new Error("Failed to create tool");
   }
 
-  // Then create the implementation
+  // Create the initial implementation
   const newImplementation: CustomToolImplementationInsert = {
+    id: uuidv4(),
     tool_id: toolId,
+    version: 1,
+    input_schema: formData.input_schema,
     execute_code: formData.execute_code,
-    sync_tool_code: formData.sync_tool_code || null,
-    is_current_version: true,
-    version: 1, // Initial version
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
+    output_schema: formData.output_schema || null,
+    requires_api_keys: formData.requires_api_keys || null,
+    is_active: true,
+    created_at: now,
+    updated_at: now,
   };
 
-  const { error: implError } = await supabaseClient
+  const { data: implementation, error: implError } = await supabaseClient
     .from("custom_tool_implementations")
-    .insert([newImplementation]);
-
-  if (implError) {
-    console.error("Error creating implementation:", implError);
-    // If implementation creation fails, delete the tool
-    await supabaseClient.from("custom_tools").delete().eq("id", toolId);
-    throw new Error("Failed to create tool implementation");
-  }
-
-  return tool;
-}
-
-// Update a custom tool
-export async function updateCustomTool(
-  id: string,
-  formData: CustomToolFormData,
-  supabaseClient: SupabaseClient
-) {
-  // First update the tool
-  const { data: tool, error: toolError } = await supabaseClient
-    .from("custom_tools")
-    .update({
-      name: formData.name,
-      description: formData.description,
-      input_schema: formData.input_schema,
-      is_async: formData.is_async || false,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", id)
+    .insert([newImplementation])
     .select()
     .single();
 
-  if (toolError) {
-    console.error("Error updating custom tool:", toolError);
-    throw new Error("Failed to update custom tool");
-  }
-
-  // Get the current version number
-  const { data: currentImpl, error: fetchError } = await supabaseClient
-    .from("custom_tool_implementations")
-    .select("version")
-    .eq("tool_id", id)
-    .eq("is_current_version", true)
-    .single();
-
-  if (fetchError) {
-    console.error("Error fetching current implementation:", fetchError);
-    throw new Error("Failed to fetch current implementation");
-  }
-
-  const nextVersion = (currentImpl?.version || 0) + 1;
-
-  // Mark all previous implementations as not current
-  await supabaseClient
-    .from("custom_tool_implementations")
-    .update({ is_current_version: false })
-    .eq("tool_id", id);
-
-  // Create a new implementation version
-  const { error: implError } = await supabaseClient
-    .from("custom_tool_implementations")
-    .insert({
-      tool_id: id,
-      execute_code: formData.execute_code,
-      sync_tool_code: formData.sync_tool_code || null,
-      is_current_version: true,
-      version: nextVersion,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    });
-
-  if (implError) {
+  if (implError || !implementation) {
+    // Rollback: delete the tool if implementation creation fails
+    await supabaseClient.from("custom_tools").delete().eq("id", toolId);
     console.error("Error creating implementation:", implError);
     throw new Error("Failed to create tool implementation");
   }
 
-  return tool;
+  return {
+    tool,
+    implementation,
+  };
 }
 
-// Toggle the active status of a custom tool
+// Update a custom tool (creates a new implementation version)
+export async function updateCustomTool(
+  toolId: string,
+  formData: Partial<CustomToolFormData>,
+  supabaseClient: SupabaseClient
+) {
+  // Get the current implementation to determine the next version
+  const { data: currentImpl, error: currentError } = await supabaseClient
+    .from("custom_tool_implementations")
+    .select("version")
+    .eq("tool_id", toolId)
+    .order("version", { ascending: false })
+    .limit(1)
+    .single();
+
+  if (currentError) {
+    console.error("Error fetching current implementation:", currentError);
+    throw new Error("Failed to fetch current implementation");
+  }
+
+  const nextVersion = currentImpl ? currentImpl.version + 1 : 1;
+  const now = new Date().toISOString();
+
+  // Update the tool metadata if name or description changed
+  if (formData.name || formData.description) {
+    const toolUpdate: CustomToolUpdate = {
+      ...(formData.name && { name: formData.name }),
+      ...(formData.description && { description: formData.description }),
+      updated_at: now,
+    };
+
+    const { error: toolError } = await supabaseClient
+      .from("custom_tools")
+      .update(toolUpdate)
+      .eq("id", toolId);
+
+    if (toolError) {
+      console.error("Error updating tool:", toolError);
+      throw new Error("Failed to update tool");
+    }
+  }
+
+  // Deactivate previous implementations
+  const { error: deactivateError } = await supabaseClient
+    .from("custom_tool_implementations")
+    .update({ is_active: false })
+    .eq("tool_id", toolId);
+
+  if (deactivateError) {
+    console.error("Error deactivating previous implementations:", deactivateError);
+    throw new Error("Failed to deactivate previous implementations");
+  }
+
+  // Create new implementation version
+  if (
+    formData.input_schema ||
+    formData.execute_code ||
+    formData.output_schema ||
+    formData.requires_api_keys
+  ) {
+    const newImplementation: CustomToolImplementationInsert = {
+      id: uuidv4(),
+      tool_id: toolId,
+      version: nextVersion,
+      input_schema: formData.input_schema!,
+      execute_code: formData.execute_code!,
+      output_schema: formData.output_schema || null,
+      requires_api_keys: formData.requires_api_keys || null,
+      is_active: true,
+      created_at: now,
+      updated_at: now,
+    };
+
+    const { data: implementation, error: implError } = await supabaseClient
+      .from("custom_tool_implementations")
+      .insert([newImplementation])
+      .select()
+      .single();
+
+    if (implError || !implementation) {
+      console.error("Error creating new implementation:", implError);
+      throw new Error("Failed to create new implementation");
+    }
+  }
+
+  // Return the updated tool with its new implementation
+  return getCustomToolWithImplementation(toolId, supabaseClient);
+}
+
+// Delete a custom tool
+export async function deleteCustomTool(
+  toolId: string,
+  supabaseClient: SupabaseClient
+) {
+  const { error } = await supabaseClient
+    .from("custom_tools")
+    .delete()
+    .eq("id", toolId);
+
+  if (error) {
+    console.error("Error deleting tool:", error);
+    throw new Error("Failed to delete tool");
+  }
+
+  return true;
+}
+
+// Toggle tool active status
 export async function toggleCustomToolStatus(
-  id: string,
+  toolId: string,
   isActive: boolean,
   supabaseClient: SupabaseClient
 ) {
   const { data, error } = await supabaseClient
     .from("custom_tools")
-    .update({
-      is_active: isActive,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", id)
+    .update({ is_active: isActive, updated_at: new Date().toISOString() })
+    .eq("id", toolId)
     .select()
     .single();
 
@@ -298,57 +364,77 @@ export async function toggleCustomToolStatus(
   return data;
 }
 
-// Delete a custom tool
-export async function deleteCustomTool(
-  id: string,
-  supabaseClient: SupabaseClient
-) {
-  // Delete the tool (cascades to implementations and executions)
-  const { error } = await supabaseClient
-    .from("custom_tools")
-    .delete()
-    .eq("id", id);
-
-  if (error) {
-    console.error("Error deleting custom tool:", error);
-    throw new Error("Failed to delete custom tool");
-  }
-
-  return true;
-}
-
 // Record a tool execution
 export async function recordToolExecution(
-  toolId: string,
+  _toolId: string,
   implementationId: string,
   agentId: string | null,
-  inputArgs: Json,
-  outputResult: Json | null,
+  input: Json,
+  output: Json | null,
   success: boolean,
   errorMessage: string | null,
-  executionTimeMs: number,
+  executionTimeMs: number | null,
   supabaseClient: SupabaseClient
 ) {
+  // Get current user
+  const { data: userData } = await supabaseClient.auth.getUser();
+
+  if (!userData.user) {
+    throw new Error("User not found");
+  }
+
   const execution: CustomToolExecutionInsert = {
-    tool_id: toolId,
+    id: uuidv4(),
     implementation_id: implementationId,
+    executed_by: userData.user.id,
     agent_id: agentId,
-    input_args: inputArgs,
-    output_result: outputResult,
+    input,
+    output,
     success,
     error_message: errorMessage,
     execution_time_ms: executionTimeMs,
     created_at: new Date().toISOString(),
   };
 
-  const { error } = await supabaseClient
+  const { data, error } = await supabaseClient
     .from("custom_tool_executions")
-    .insert([execution]);
+    .insert([execution])
+    .select()
+    .single();
 
   if (error) {
-    console.error("Error recording tool execution:", error);
-    throw new Error("Failed to record tool execution");
+    console.error("Error recording execution:", error);
+    throw new Error("Failed to record execution");
   }
 
-  return true;
+  return data;
+}
+
+// Get execution history for a tool
+export async function getToolExecutions(
+  toolId: string,
+  limit: number = 50,
+  supabaseClient: SupabaseClient
+) {
+  const { data: executions, error } = await supabaseClient
+    .from("custom_tool_executions")
+    .select(
+      `
+      *,
+      implementation:custom_tool_implementations(
+        version,
+        tool_id
+      )
+    `
+    )
+    .eq("implementation.tool_id", toolId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    console.error("Error fetching executions:", error);
+    throw new Error("Failed to fetch executions");
+  }
+
+  return executions;
 }

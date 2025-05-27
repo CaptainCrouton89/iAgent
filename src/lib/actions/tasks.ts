@@ -1,6 +1,6 @@
 import { SupabaseClient } from "@supabase/supabase-js";
 import { v4 as uuidv4 } from "uuid";
-import { Database } from "../../../supabase/database.types";
+import { Database } from "@/utils/supabase/database.types";
 
 export type Task = Database["public"]["Tables"]["tasks"]["Row"];
 export type TaskInsert = Database["public"]["Tables"]["tasks"]["Insert"];

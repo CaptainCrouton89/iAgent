@@ -78,7 +78,7 @@ export async function POST(req: NextRequest) {
     // Record the execution
     await recordToolExecution(
       parsedBody.tool_id,
-      implementationId,
+      implementationId!,
       parsedBody.agent_id || null,
       (parsedBody.args as Json) || {},
       result,
