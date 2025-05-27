@@ -29,51 +29,12 @@ The database schema consists of the following tables:
    - Extended information for tasks specifically related to programming
    - Links to the main task and relevant context
 
-## Migration Files
-
-Two migration files have been created:
-
-- `supabase/migrations/20240601_create_tables.sql`: Creates the tables with appropriate constraints and indexes
-- `supabase/migrations/20240601_add_rls_policies.sql`: Sets up Row Level Security policies for the tables
-
 ## Working with Supabase
 
-### Running Migrations
-
-To apply the migrations to your Supabase project:
-
-1. Install Supabase CLI if you haven't already:
-
-   ```
-   pnpm install -g supabase
-   ```
-
-2. Login to Supabase:
-
-   ```
-   supabase login
-   ```
-
-3. Link your project (if not already linked):
-
-   ```
-   supabase link --project-ref <your-project-ref>
-   ```
-
-4. Apply the migrations:
-   ```
-   supabase db push
-   ```
-
-### Generating TypeScript Types
+- `src/utils/supabase/database.types.ts` contains all the table contents of supabase.
+- To make changes to the tables, save a "[descriptive_name].sql" file and indicate to the user that they need to run the script to update the table
 
 After applying migrations, generate TypeScript types with:
-
-```
-pnpm supabase:types
-```
-
-This will update the `supabase/database.types.ts` file with the latest type definitions based on your database schema.
 
 ### Working with the Database
 

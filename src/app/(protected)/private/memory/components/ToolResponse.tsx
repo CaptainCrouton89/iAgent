@@ -6,6 +6,9 @@ interface SearchMemoriesArgs {
   query: string;
   threshold?: number;
   limit?: number;
+  startDate?: string;
+  endDate?: string;
+  page?: number;
 }
 
 interface InspectMemoryArgs {
@@ -119,6 +122,21 @@ function renderSearchMemoriesTool(toolInvocation: ToolInvocation) {
           {args.limit !== undefined && (
             <p className="text-xs text-muted-foreground mt-1">
               Limit: {args.limit}
+            </p>
+          )}
+          {args.startDate && (
+            <p className="text-xs text-muted-foreground mt-1">
+              Start Date: {args.startDate}
+            </p>
+          )}
+          {args.endDate && (
+            <p className="text-xs text-muted-foreground mt-1">
+              End Date: {args.endDate}
+            </p>
+          )}
+          {args.page !== undefined && (
+            <p className="text-xs text-muted-foreground mt-1">
+              Page: {args.page}
             </p>
           )}
           <p className="text-sm font-medium mt-2">Memory Search Results:</p>
