@@ -1,5 +1,6 @@
 import { Message } from "@ai-sdk/react";
 import { KeyboardEvent, useEffect, useRef, useState } from "react";
+import Markdown from "markdown-to-jsx";
 import { ToolResponse } from "./ToolResponse";
 
 interface EditableMessageProps {
@@ -56,6 +57,10 @@ export function EditableMessage({
     }
   };
 
+  const markdownOptions = {
+    disableParsingRawHTML: true,
+  };
+
   const getEmotionStyle = (emotion: string) => {
     const styles: Record<string, string> = {
       Happy: "bg-green-100 border-green-200",
@@ -86,8 +91,8 @@ export function EditableMessage({
       return message.parts.map((part, i) => {
         if (part.type === "text") {
           return (
-            <div key={i} className="whitespace-pre-wrap">
-              {part.text}
+            <div key={i} className="markdown-content">
+              <Markdown options={markdownOptions}>{part.text}</Markdown>
             </div>
           );
         }
@@ -98,7 +103,11 @@ export function EditableMessage({
       });
     }
     // Fallback to content if no parts are available
-    return <div className="whitespace-pre-wrap">{message.content}</div>;
+    return (
+      <div className="markdown-content">
+        <Markdown options={markdownOptions}>{message.content || ""}</Markdown>
+      </div>
+    );
   };
 
   return (

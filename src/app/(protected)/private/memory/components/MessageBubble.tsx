@@ -1,8 +1,13 @@
 import { Message } from "@ai-sdk/react";
+import Markdown from "markdown-to-jsx";
 
 interface MessageBubbleProps {
   message: Message;
 }
+
+const markdownOptions = {
+  disableParsingRawHTML: true,
+};
 
 export function MessageBubble({ message }: MessageBubbleProps) {
   return (
@@ -22,8 +27,8 @@ export function MessageBubble({ message }: MessageBubbleProps) {
           message.parts.map((part, i) => {
             if (part.type === "text") {
               return (
-                <div key={i} className="whitespace-pre-wrap">
-                  {part.text}
+                <div key={i} className="markdown-content">
+                  <Markdown options={markdownOptions}>{part.text}</Markdown>
                 </div>
               );
             }
