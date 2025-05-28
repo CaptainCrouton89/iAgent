@@ -18,20 +18,49 @@ interface CompressedMessage {
   content: string;
 }
 
-// Schema for title and summary generation
-const titleSummarySchema = z.object({
+// Schema for memory metadata generation
+const memoryMetadataSchema = z.object({
   title: z
     .string()
     .describe("A concise, descriptive title for the conversation"),
   summary: z
     .string()
     .describe("A 1-2 sentence summary of the conversation content"),
+  label: z
+    .enum([
+      "important",
+      "user_profile",
+      "general",
+      "temporary",
+      "trivial",
+    ])
+    .describe(
+      "Category for the memory based on content importance and type"
+    ),
+  strength: z
+    .number()
+    .min(0)
+    .max(1)
+    .describe("Initial strength score based on conversation quality (0.0-1.0)"),
+  pinned: z
+    .boolean()
+    .describe("Whether this memory should be permanently retained"),
+  reasoning: z
+    .string()
+    .describe("Brief explanation for the metadata choices"),
 });
 
-// Function to generate title and summary for a conversation
-async function generateTitleAndSummary(
-  messages: Message[]
-): Promise<{ title: string; summary: string }> {
+// Function to generate memory metadata for a conversation
+async function generateMemoryMetadata(
+  messages: Message[],
+  usedMemoryIds?: string[]
+): Promise<{
+  title: string;
+  summary: string;
+  label: string;
+  strength: number;
+  pinned: boolean;
+}> {
   try {
     // Extract text content from messages for analysis
     const conversationText = messages
@@ -52,29 +81,57 @@ async function generateTitleAndSummary(
       return {
         title: "Conversation",
         summary: "A conversation between user and assistant.",
+        label: "general",
+        strength: 0.5,
+        pinned: false,
       };
     }
 
     const { object } = await generateObject({
       model: openai("gpt-4.1-mini"),
-      schema: titleSummarySchema,
-      prompt: `Analyze this conversation and generate a title and summary:\n\n${conversationText}`,
-      system:
-        "You are analyzing a conversation to create a meaningful title and brief summary. The title should be concise and descriptive. The summary should be 1-2 sentences capturing the main topics or themes discussed.",
+      schema: memoryMetadataSchema,
+      prompt: `Analyze this conversation and generate metadata:\n\n${conversationText}\n\nPrevious memories used: ${usedMemoryIds ? usedMemoryIds.length : 0}`,
+      system: `You are analyzing a conversation to create comprehensive memory metadata.
+
+Label Guidelines:
+- "important": Core user information, critical decisions, key facts about the user
+- "user_profile": Personal information, preferences, habits, names, relationships
+- "general": Default for standard conversations with moderate value
+- "temporary": Time-sensitive information, transient context that won't be relevant long-term
+- "trivial": Small talk, low-value exchanges with no lasting importance
+
+Strength Calculation (0.0-1.0):
+- Base: 0.5 for standard conversations
+- Boost to 0.7-0.9 for: Questions answered, problems solved, new information learned about user
+- Reduce to 0.3-0.4 for: Repetitive content, small talk, no clear outcome
+
+Auto-pin when:
+- User's name is first mentioned
+- Key personal identifiers (email, phone, address)
+- Explicitly marked important information
+- Core preferences that affect all future interactions`,
       temperature: 0.3,
     });
 
-    return object;
+    const { reasoning, ...metadata } = object;
+    console.log("Generated memory metadata:", metadata, "Reasoning:", reasoning);
+    return metadata;
   } catch (error) {
     console.error("Error generating title and summary:", error);
     return {
       title: "Conversation",
       summary: "A conversation between user and assistant.",
+      label: "general",
+      strength: 0.5,
+      pinned: false,
     };
   }
 }
 
-export async function saveConversation(originalMessages: Message[]) {
+export async function saveConversation(
+  originalMessages: Message[],
+  usedMemoryIds?: string[]
+) {
   try {
     const supabase = await createClient();
 
@@ -162,8 +219,9 @@ export async function saveConversation(originalMessages: Message[]) {
       );
     }
 
-    // Generate title and summary for the conversation
-    const { title, summary } = await generateTitleAndSummary(originalMessages);
+    // Generate comprehensive metadata for the conversation
+    const { title, summary, label, strength, pinned } =
+      await generateMemoryMetadata(originalMessages, usedMemoryIds);
 
     const { error } = await supabase.from("memories").insert({
       content: originalMessages,
@@ -171,12 +229,46 @@ export async function saveConversation(originalMessages: Message[]) {
       embedding, // This can be null if no content was embeddable
       title,
       summary,
+      label,
+      strength,
+      pinned,
+      last_used: new Date().toISOString(), // Initialize to creation time
       auth_id: user.id,
       created_at: new Date().toISOString(), // Store in UTC (this is correct)
     });
 
     if (error) {
       throw error;
+    }
+
+    // Update used memories if any were provided
+    if (usedMemoryIds && usedMemoryIds.length > 0) {
+      // Boost strength and update last_used for memories that were actually used
+      const updatePromises = usedMemoryIds.map(async (memoryId) => {
+        // First get the current strength
+        const { data: memory } = await supabase
+          .from("memories")
+          .select("strength")
+          .eq("id", memoryId)
+          .eq("auth_id", user.id)
+          .single();
+
+        if (memory) {
+          // Update with boosted strength (capped at 1.0)
+          return supabase
+            .from("memories")
+            .update({
+              last_used: new Date().toISOString(),
+              strength: Math.min(1.0, (memory.strength || 0.5) + 0.1),
+            })
+            .eq("id", memoryId)
+            .eq("auth_id", user.id);
+        }
+      });
+
+      await Promise.all(updatePromises).catch((error) => {
+        console.error("Error updating used memories:", error);
+      });
     }
 
     revalidatePath("/private/memory-chat");

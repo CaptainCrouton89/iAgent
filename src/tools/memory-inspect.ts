@@ -36,7 +36,7 @@ export const memoryInspectTool = tool({
       // Fetch the memory by ID
       const { data: memory, error } = await supabase
         .from("memories")
-        .select("id, content, compressed_conversation, context, created_at")
+        .select("id, content, compressed_conversation, context, created_at, strength")
         .eq("id", memoryId)
         .eq("auth_id", user.id)
         .single();
@@ -44,6 +44,22 @@ export const memoryInspectTool = tool({
       if (error || !memory) {
         console.error("Error fetching memory:", error);
         return `Memory with ID ${memoryId} not found or access denied. Error: ${error?.message || 'No memory found'}`;
+      }
+      
+      // Update memory usage - boost strength and update last_used
+      const newStrength = Math.min(1.0, (memory.strength || 0.5) + 0.1);
+      const { error: updateError } = await supabase
+        .from("memories")
+        .update({
+          last_used: new Date().toISOString(),
+          strength: newStrength,
+        })
+        .eq("id", memoryId)
+        .eq("auth_id", user.id);
+        
+      if (updateError) {
+        console.error("Error updating memory usage:", updateError);
+        // Continue even if update fails
       }
 
       // Parse the content field

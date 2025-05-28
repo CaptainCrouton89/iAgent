@@ -1,247 +1,161 @@
-## New Tables:
+# Memory Metadata Enhancement Plan
 
-### Task Table (created via chat)
+## Overview
 
-- Each task can have a parent
-- Has a status (new, in progress, done)
-- Owner: A crew member who owns that task and is responsible for completing it
-- Context: Text file with lots of unstructured data, used for solving task
+Enhance the memory system with intelligent metadata, decay mechanics, and improved search ranking for more sophisticated conversation memory retention.
 
-### Programming Task Table
+## 1. Database Updates
 
-- Each task has a parent task from the task table
-- Description: The actual instructions for cursor
-- Context: The additional useful information text
+✅ **Already Complete** - The `memories` table has been updated with:
+- `label` VARCHAR(50)
+- `strength` FLOAT
+- `last_used` TIMESTAMPTZ
+- `pinned` BOOLEAN
 
-### Agent Table
+## 2. Memory Save Enhancement (`src/actions/memory-chat.ts`)
 
-- Agent title
-- Agent goal (What it's trying to achieve)
-- Agent background
-- Agent context (passed with all of its prompts)
-- Agent log: Text field of last actions
+### Update `generateTitleAndSummary` to `generateMemoryMetadata`:
 
-# How it works
+- Generate title and summary (existing)
+- Generate label based on conversation content
+- Calculate initial strength based on conversation importance
+- Set `last_used` to creation time (not on every retrieval)
+- Determine if content should be pinned
+- Return array of memory IDs that were used in the conversation
 
-- Cursor agent mode is in while loop:
-  1. fetch the next task and implement it. Do not stop doing so.
-  2. If the problem is too large, feed it back to the orchestrator
-  3. Keep polling until you can go again (via tool call)
-- Planner Agent
-  1. You say what you want to get done
-  2. It determines how it needs to get broken down, and may ask you more questions
-  3. Breaks down task a lot further, does initial research on necessary contexts
+### Label Categories (for user conversations):
 
-## Processes
+- `important`: Core user info, critical decisions, key facts
+- `user_profile`: Personal info, preferences, habits, names
+- `project_x`: Project-specific memories (dynamic labels)
+- `temporary`: Time-sensitive info, transient context
+- `trivial`: Small talk, low-value exchanges
+- `general`: Default category
 
-1. Observer
-   1. Polls contexts, agents, etc, and updates blackboard context
+### Strength Calculation:
 
-## Tools
+- Base strength: 0.5-0.9 depending on content quality
+- Boost for: Questions answered, problems solved, new information learned
+- Reduce for: Repetitive content, small talk, no clear outcome
 
-1. Get task tree: fetches task and all child tasks
-2. Get task details: Fetches task with its context
-3. Delegate: Pass a task id and get back an "answer" to the task (works on research and architect, but maybe code too??)
-   1. Marks the task as in progress
-   2. Should spin up a new agent, (and pass it the context? or does agent make its own?)
-   3. Agent immediately claims the task
-4. Delegate Cusor Task:
-   1. Describes the task in detail
-   2. Saves it to a table
-5. Write to context
-   1. At start of task, should write everything it learns to context
-6.
+### Auto-pin Logic:
 
-Autopruner: Running in parallel process, is managing context
+- User's name when first mentioned
+- Key personal identifiers
+- Explicitly marked important information
+- Core preferences that affect all interactions
 
-- Polls context, and polls active agents and their tasks
+## 3. Memory Usage Tracking
 
-I tell cursor:
+### When saving a conversation:
+1. Analyze which memories from search were actually relevant
+2. Update `last_used` timestamp for those memories only
+3. Boost strength by +0.1 (larger boost) for used memories
+4. Track memory IDs in conversation metadata
 
-1. Analyze everything, refactor this to use the Vercel SDK
-2. Make a new page using this as a template. It should do XYZ
-3. Make a personal CRM. Plan it and implement it.
+### When using `inspectMemory` tool:
+- Update `last_used` for that specific memory
+- Boost strength by +0.1
 
-Enqueuing agent tasks vs async agent tasks
+## 4. Memory Search Enhancement (`src/tools/memory-search.ts`)
 
-1. Ex 1
+### Enhanced Ranking Algorithm:
 
-   1. Super Agent (SA) starts looking at files
-   2. SA asks clarifying questions
-   3. SA writes intial problem/goal context with goalId, and enqueues the task id. (or alternatively, doesn't, and relies on the polling from the cursor agent). If the task is cursor, it doesn't enqueue, otherwise it does.
+1. Fetch 3x requested limit from database (to allow better ranking)
+2. Get all metadata fields including new ones
+3. Calculate composite score for each memory:
+   ```
+   score = (similarity * 0.4) +
+           (strength * 0.3) +
+           (recency_score * 0.2) +
+           (label_importance * 0.1)
+   ```
+4. Apply modifiers:
+   - Pinned memories: +1.0 to score
+   - Label importance multipliers:
+     - `important`: 1.5x
+     - `user_profile`: 1.3x
+     - `project_*`: 1.2x
+     - `general`: 1.0x
+     - `temporary`: 0.8x
+     - `trivial`: 0.5x
+5. Sort by composite score
+6. Return top N results as requested
 
-   ## Cursor agent:
+### Recency Score:
 
-   1. Retrieves "full context"
-      1. Gets the public messages
-      2. Gets overarching goal
-      3. Gets the task with context
-      4. Who the team is
-   2. Gets to work implementing,
+- Calculate based on `last_used` timestamp
+- Exponential decay: `recency_score = exp(-days_since_used / 30)`
 
-   ## Non-cursor agent:
+## 5. Memory Decay Cron Job
 
-   3. Retrieves full context
-      1. Public messages
-      2. Task with context
-      3. Recent memories
-      4. Who the team is
-   4. System prompts, learns the tools
-   5. Attempts to solve the problem using its tools
+### Endpoint: `/api/cron/ai/memory/decay`
 
-Async Tool Calling: primarily for research, or for triggering multiple other tools that each call agents
+- Run daily at 2 AM UTC
+- Process all non-pinned memories
 
-- Call tool. It returns an id for the job.
-  - Code version: Agent is pinged with a "job complete" prompt, passing the job id (happens via the job finishing). The agent then can retrieve the job results.
-  - MCP version: Agent has a tool where it can request jobs finished
+### Decay Formula:
 
-Contexts:
+```typescript
+// Base decay rate per day (adjusted for typical starting strength 0.5-0.7)
+const baseDecayRate = {
+  important: 0.001,      // -0.1% per day (never deleted)
+  user_profile: 0.001,   // -0.1% per day (~1-2 years to deletion)
+  general: 0.003,        // -0.3% per day (~4-6 months to deletion)
+  temporary: 0.01,       // -1% per day (~6-8 weeks to deletion)
+  trivial: 0.02,         // -2% per day (~3-4 weeks to deletion)
+};
 
-- id
-- text data
-- created
-- updated
+// Apply decay based on days since last_used
+newStrength = currentStrength - (baseDecayRate[label] * daysSinceLastUsed);
 
-Conversation Space
+// Deletion criteria
+if (label !== "important" && strength < 0.1) {
+  deleteMemory();
+}
+```
 
-- Public space
+### Additional Rules:
 
-Crew framework:
+- Never decay pinned memories
+- Minimum strength: 0.0
+- Log decay operations for monitoring
 
-- You talk to the project manager
-- Architect
-- Developer
-- Researcher
-- Project manager
+## 6. Implementation Order
 
-Meta Crew
+1. **Update Save Function** ✅
+   - Enhance metadata generation
+   - Track used memories from search
 
-- ## Observer
-- Pruner
-  - Looks at contexts, removes them that are stale
+2. **Update Search Function**
+   - Implement enhanced ranking with metadata
+   - Test ranking algorithm
 
-Each crew member:
+3. **Create Decay Cron Job**
+   - Implement decay logic
+   - Add to Vercel cron configuration
 
-- Can be spun up as needed in a job queue
-- Knows all the goals/tasks up the tree from what they are doing
-- Is listening to the public message bus
-- Can see what other agents are working on
-- Can wait indefinitely for other crew members to finish their tasks before finishing
-- Can delegate tasks to more qualified members
-- Can check in on delated tasks to see their progress
-- Can post updates to task progress
-- Has short term memory which is always loaded into context (a log of its own recent actions, notifications, etc)
-- Is active or not
-- Delegating is just an async tool call
-- Researching is an async tool call
+4. **Add Usage Tracking**
+   - Update memory strength/last_used on actual usage
+   - Track in conversation save and inspect tool
 
-Each Task
+## 7. Database Function Updates Needed
 
-- Is cursor or not (if it's cursor, it's not enqueued, and relies on a persistent agent to pick it up when it becomes available)
-- Is owned by a crew member
-- Has logs on it with progress tracked
-- Is parented to another task
-- Has its own context (raw text for now)
-- Has a "cursor instruction" if relevant (cursor needs different instructions compared to agent)
-- Has subscribers: all the agents who are immediately notified upon completion
+Update `search_memories_by_date` to return all metadata:
+- Add `title`, `summary`, `label`, `strength`, `last_used`, `pinned` to return type
 
-Async Tools via Jobs
+## 8. Testing Strategy
 
-1. Agent makes a job tool request .enqueue(toolName, args, agentId, path)
+- Test label generation accuracy
+- Verify ranking improvements
+- Monitor decay rates
+- Ensure pinned memories persist
+- Performance testing with large datasets
 
-Requests to agent:
+## 8. Future Enhancements
 
-- Via chat on web
-- agent/[agentId]/webhook/[path] for finished jobs or just agent/[agentId]/webhook if no path specified.
-  - Webhook hit with agent id and job data in body
-  - Will prompt agent with: "Job [id] returned with data: { }"
-
-# Supabase Authentication Implementation Plan
-
-## 1. Setup and Configuration
-
-- Install required packages
-  ```bash
-  pnpm add @supabase/supabase-js @supabase/ssr
-  ```
-- Configure environment variables
-  - Create `.env.local` file with Supabase URL and anon key
-  - Add these to `.gitignore` if not already there
-
-## 2. Client Creation Utilities
-
-- Create utility functions for Supabase clients
-  - Create `utils/supabase/client.ts` for browser client
-  - Create `utils/supabase/server.ts` for server-side client
-  - Create `utils/supabase/middleware.ts` for auth middleware helpers
-
-## 3. Middleware Setup
-
-- Create `middleware.ts` at the project root
-  - Implement session refreshing logic
-  - Add appropriate matchers to exclude static assets
-  - Configure to update auth tokens automatically
-
-## 4. Authentication UI and Routes
-
-- Create login page (`app/login/page.tsx`)
-  - Implement email/password login form
-  - Add server actions for login/signup (`app/login/actions.ts`)
-- Create signup page or component
-  - Implement registration form
-  - Handle form submission via server actions
-- Create logout functionality
-  - Implement server action for logging out
-
-## 5. Email Confirmation Flow
-
-- Update Supabase email templates in the dashboard
-  - Change confirmation URL format to support server-side flow
-- Create confirmation handler
-  - Implement `app/auth/confirm/route.ts` to handle email confirmations
-  - Set up token verification and redirection
-
-## 6. Protected Routes
-
-- Create authentication checking utilities
-  - Add helper for checking auth status in server components
-- Implement protected routes
-  - Create example private page (`app/private/page.tsx`)
-  - Add authentication checks and redirects
-
-## 7. User Profile Management
-
-- Create user profile page
-  - Display user information
-  - Allow editing profile details
-- Implement password reset functionality
-  - Create forgot password page
-  - Set up email templates for password reset
-
-## 8. Testing and Validation
-
-- Test authentication flows
-  - Registration
-  - Login
-  - Email confirmation
-  - Password reset
-  - Protected routes
-- Verify session persistence
-  - Test session refresh functionality
-  - Verify token refresh in middleware
-
-## 9. Additional Features (Optional)
-
-- Social login integration
-  - Google, GitHub, etc.
-- Multi-factor authentication
-  - SMS or TOTP setup
-- User role management
-  - Admin vs regular users
-  - Role-based access control
-
-## 10. Deployment Considerations
-
-- Ensure environment variables are set in production
-- Configure Supabase production settings
-- Test auth flows in staging/production environments
+- User-adjustable decay rates
+- Manual label/pin editing
+- Memory clustering by project
+- Export/import memory sets
+- Analytics dashboard for memory health
