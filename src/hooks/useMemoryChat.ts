@@ -40,12 +40,16 @@ export function useMemoryChat({ api }: UseChatOptions) {
               if (!lastMessage.parts) lastMessage.parts = [];
               
               console.log("Current message parts before text update:", lastMessage.parts);
+              console.log("Current accumulated text:", currentAssistantMessageRef.current);
               
               // Find existing text part or add new one
               const textPartIndex = lastMessage.parts.findIndex(p => p.type === "text");
               if (textPartIndex >= 0) {
                 // Update existing text part
-                lastMessage.parts[textPartIndex] = { type: "text", text: currentAssistantMessageRef.current };
+                const textPart = lastMessage.parts[textPartIndex];
+                if (textPart.type === "text") {
+                  textPart.text = currentAssistantMessageRef.current;
+                }
               } else {
                 // Add new text part at the beginning (to preserve tool invocations)
                 lastMessage.parts.unshift({ type: "text", text: currentAssistantMessageRef.current });

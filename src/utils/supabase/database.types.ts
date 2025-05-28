@@ -271,6 +271,60 @@ export type Database = {
           },
         ]
       }
+      self_concept: {
+        Row: {
+          auth_id: string
+          beliefs: Json
+          confidence_scores: Json
+          created_at: string
+          embedding: string | null
+          emotional_baseline: Json
+          evolution_count: number
+          goals: Json
+          id: string
+          identity: Json
+          interaction_patterns: Json
+          last_reflection: string | null
+          personality_traits: Json
+          relationship_dynamics: Json
+          updated_at: string
+        }
+        Insert: {
+          auth_id: string
+          beliefs?: Json
+          confidence_scores?: Json
+          created_at?: string
+          embedding?: string | null
+          emotional_baseline?: Json
+          evolution_count?: number
+          goals?: Json
+          id?: string
+          identity?: Json
+          interaction_patterns?: Json
+          last_reflection?: string | null
+          personality_traits?: Json
+          relationship_dynamics?: Json
+          updated_at?: string
+        }
+        Update: {
+          auth_id?: string
+          beliefs?: Json
+          confidence_scores?: Json
+          created_at?: string
+          embedding?: string | null
+          emotional_baseline?: Json
+          evolution_count?: number
+          goals?: Json
+          id?: string
+          identity?: Json
+          interaction_patterns?: Json
+          last_reflection?: string | null
+          personality_traits?: Json
+          relationship_dynamics?: Json
+          updated_at?: string
+        }
+        Relationships: []
+      }
       tasks: {
         Row: {
           complexity: number
