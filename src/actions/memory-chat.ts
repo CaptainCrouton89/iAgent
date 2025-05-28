@@ -1,9 +1,9 @@
 "use server";
 
 import { createClient } from "@/utils/supabase/server";
-import { openai as vercelOpenAI } from "@ai-sdk/openai";
+import { openai } from "@ai-sdk/openai";
 import { Message } from "@ai-sdk/react";
-import { generateText, generateObject } from "ai";
+import { generateObject, generateText } from "ai";
 import { revalidatePath } from "next/cache";
 import OpenAI from "openai";
 import { z } from "zod";
@@ -29,21 +29,23 @@ const titleSummarySchema = z.object({
 });
 
 // Function to generate title and summary for a conversation
-async function generateTitleAndSummary(messages: Message[]): Promise<{title: string, summary: string}> {
+async function generateTitleAndSummary(
+  messages: Message[]
+): Promise<{ title: string; summary: string }> {
   try {
     // Extract text content from messages for analysis
     const conversationText = messages
       .map((msg) => {
         if (msg.parts) {
           const textContent = msg.parts
-            .map((part) => part.type === "text" ? part.text : "")
-            .filter(text => text.trim())
+            .map((part) => (part.type === "text" ? part.text : ""))
+            .filter((text) => text.trim())
             .join(" ");
           return textContent ? `${msg.role}: ${textContent}` : "";
         }
         return msg.content ? `${msg.role}: ${msg.content}` : "";
       })
-      .filter(line => line.trim())
+      .filter((line) => line.trim())
       .join("\n");
 
     if (!conversationText.trim()) {
@@ -54,10 +56,11 @@ async function generateTitleAndSummary(messages: Message[]): Promise<{title: str
     }
 
     const { object } = await generateObject({
-      model: vercelOpenAI("gpt-4.1-mini"),
+      model: openai("gpt-4.1-mini"),
       schema: titleSummarySchema,
       prompt: `Analyze this conversation and generate a title and summary:\n\n${conversationText}`,
-      system: "You are analyzing a conversation to create a meaningful title and brief summary. The title should be concise and descriptive. The summary should be 1-2 sentences capturing the main topics or themes discussed.",
+      system:
+        "You are analyzing a conversation to create a meaningful title and brief summary. The title should be concise and descriptive. The summary should be 1-2 sentences capturing the main topics or themes discussed.",
       temperature: 0.3,
     });
 
@@ -109,9 +112,9 @@ export async function saveConversation(originalMessages: Message[]) {
             task: generateText({
               system:
                 "You are a helpful assistant that summarizes text, compressing it into an informationally dense summary with maximum specificity and minimum words. Use sentence fragments if appropriate. Respond only with the compressed text, no other text.",
-              model: vercelOpenAI("gpt-4.1-nano"),
+              model: openai("gpt-4.1-nano"),
               prompt: `Text: ${messageTextToProcess}`,
-            })
+            }),
           };
         }
         return null;
@@ -120,7 +123,7 @@ export async function saveConversation(originalMessages: Message[]) {
 
     // Execute all summarization tasks in parallel
     const summarizationResults = await Promise.allSettled(
-      summarizationTasks.map(task => task.task)
+      summarizationTasks.map((task) => task.task)
     );
 
     // Process results in original order
@@ -128,7 +131,7 @@ export async function saveConversation(originalMessages: Message[]) {
       const { msg, messageTextToProcess } = summarizationTasks[i];
       const result = summarizationResults[i];
 
-      if (result.status === 'fulfilled') {
+      if (result.status === "fulfilled") {
         const summarizedText = result.value.text;
         compressedConversationPayload.push({
           role: msg.role,
