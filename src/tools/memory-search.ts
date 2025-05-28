@@ -10,7 +10,12 @@ export const memorySearchTool = tool({
   description:
     "Search for previous conversations or memories using semantic similarity and optional date filtering. Supports pagination to browse through multiple results. Use 'deep' mode for full compressed conversations or 'shallow' mode for just titles and summaries.",
   parameters: z.object({
-    query: z.string().optional().describe("The search query to find relevant memories (optional - leave empty to search all memories in date range)"),
+    query: z
+      .string()
+      .optional()
+      .describe(
+        "The search query to find relevant memories (optional - leave empty to search all memories in date range)"
+      ),
     threshold: z
       .number()
       .min(0)
@@ -21,8 +26,12 @@ export const memorySearchTool = tool({
       .number()
       .min(1)
       .max(10)
-      .default(5)
       .describe("Maximum number of results per page"),
+    searchMode: z
+      .enum(["deep", "shallow"])
+      .describe(
+        "Search mode: 'deep' returns full compressed conversations, 'shallow' returns only titles and summaries"
+      ),
     page: z
       .number()
       .min(1)
@@ -31,34 +40,49 @@ export const memorySearchTool = tool({
     startDate: z
       .string()
       .optional()
-      .describe("Start date for search range (ISO format or relative like '7 days ago')"),
+      .describe(
+        "Start date for search range (ISO format or relative like '7 days ago')"
+      ),
     endDate: z
       .string()
       .optional()
-      .describe("End date for search range (ISO format or relative like 'today')"),
-    searchMode: z
-      .enum(["deep", "shallow"])
-      .default("deep")
-      .describe("Search mode: 'deep' returns full compressed conversations, 'shallow' returns only titles and summaries"),
+      .describe(
+        "End date for search range (ISO format or relative like 'today')"
+      ),
   }),
-  execute: async ({ query, threshold = 0.6, limit = 10, page = 1, startDate, endDate, searchMode = "deep" }) => {
+  execute: async ({
+    query,
+    threshold = 0.6,
+    limit = 10,
+    page = 1,
+    startDate,
+    endDate,
+    searchMode = "deep",
+  }) => {
     try {
       // Parse relative dates if provided
       let parsedStartDate: Date | undefined;
       let parsedEndDate: Date | undefined;
-      
+
       if (startDate) {
         parsedStartDate = parseRelativeDate(startDate);
       }
-      
+
       if (endDate) {
         parsedEndDate = parseRelativeDate(endDate);
       }
-      
+
       // If no query is provided but dates are, we'll search for all memories in that time range
       const searchQuery = query || "";
-      
-      const result = await searchMemories(searchQuery, threshold, limit, parsedStartDate, parsedEndDate, page);
+
+      const result = await searchMemories(
+        searchQuery,
+        threshold,
+        limit,
+        parsedStartDate,
+        parsedEndDate,
+        page
+      );
 
       if (result.memories.length === 0) {
         if (page > 1) {
@@ -70,14 +94,16 @@ export const memorySearchTool = tool({
       // Build pagination info
       let paginationInfo = `\n📄 Page ${result.page} of ${result.totalPages} (${result.totalCount} total memories)`;
       if (result.hasMore) {
-        paginationInfo += `\n➡️ More results available. Use page=${result.page + 1} to see the next page.`;
+        paginationInfo += `\n➡️ More results available. Use page=${
+          result.page + 1
+        } to see the next page.`;
       }
 
       const memoriesOutput = result.memories
         .map((memory, index) => {
           const absoluteIndex = (page - 1) * limit + index + 1;
           let messageContent = "";
-          
+
           if (searchMode === "shallow") {
             // Shallow mode: return only title and summary
             const title = memory.title || "Untitled Memory";
@@ -92,16 +118,21 @@ export const memorySearchTool = tool({
             ) {
               messageContent = memory.compressed_conversation
                 .map(
-                  (compressedMsg: { role: string; content: string }, msgIndex: number) =>
-                    `[${msgIndex}] ${compressedMsg.role === "user" ? "Silas" : "You"}: ${
-                      compressedMsg.content
-                    }`
+                  (
+                    compressedMsg: { role: string; content: string },
+                    msgIndex: number
+                  ) =>
+                    `[${msgIndex}] ${
+                      compressedMsg.role === "user" ? "Silas" : "You"
+                    }: ${compressedMsg.content}`
                 )
                 .join("\\n");
             }
           }
 
-          return `Memory ${absoluteIndex} [ID: ${memory.id}] (${formatRelativeTime(
+          return `Memory ${absoluteIndex} [ID: ${
+            memory.id
+          }] (${formatRelativeTime(
             memory.created_at
           )}) - Relevance: ${Math.round(
             memory.similarity * 100
@@ -122,52 +153,52 @@ export const memorySearchTool = tool({
  */
 function parseRelativeDate(dateStr: string): Date {
   const trimmed = dateStr.trim().toLowerCase();
-  
+
   // Check if it's already an ISO date
   const isoDate = new Date(dateStr);
   if (!isNaN(isoDate.getTime())) {
     return isoDate;
   }
-  
+
   const now = new Date();
-  
+
   // Parse relative dates
-  if (trimmed === 'today') {
+  if (trimmed === "today") {
     return new Date(now.setHours(0, 0, 0, 0));
   }
-  
-  if (trimmed === 'yesterday') {
+
+  if (trimmed === "yesterday") {
     const yesterday = new Date(now);
     yesterday.setDate(yesterday.getDate() - 1);
     yesterday.setHours(0, 0, 0, 0);
     return yesterday;
   }
-  
+
   // Parse "X days/weeks/months ago" format
   const match = trimmed.match(/(\d+)\s*(day|week|month|year)s?\s*ago/);
   if (match) {
     const [, amount, unit] = match;
     const date = new Date(now);
     const num = parseInt(amount);
-    
+
     switch (unit) {
-      case 'day':
+      case "day":
         date.setDate(date.getDate() - num);
         break;
-      case 'week':
-        date.setDate(date.getDate() - (num * 7));
+      case "week":
+        date.setDate(date.getDate() - num * 7);
         break;
-      case 'month':
+      case "month":
         date.setMonth(date.getMonth() - num);
         break;
-      case 'year':
+      case "year":
         date.setFullYear(date.getFullYear() - num);
         break;
     }
-    
+
     return date;
   }
-  
+
   // Default to current date if parsing fails
   return now;
 }
