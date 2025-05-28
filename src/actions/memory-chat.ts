@@ -86,42 +86,62 @@ export async function saveConversation(originalMessages: Message[]) {
     const compressedConversationPayload: CompressedMessage[] = [];
     const embeddingSourceMaterial: string[] = [];
 
-    for (const msg of originalMessages) {
-      // Process only text parts for summarization and embedding
-      const messageTextToProcess = msg.parts
-        ?.map((part) => {
-          if (part.type === "text") {
-            return part.text.trim();
-          }
-          return null;
-        })
-        .filter((text): text is string => text !== null && text !== "")
-        .join(" ")
-        .trim();
+    // Prepare summarization tasks for parallel processing
+    const summarizationTasks = originalMessages
+      .map((msg, index) => {
+        // Process only text parts for summarization and embedding
+        const messageTextToProcess = msg.parts
+          ?.map((part) => {
+            if (part.type === "text") {
+              return part.text.trim();
+            }
+            return null;
+          })
+          .filter((text): text is string => text !== null && text !== "")
+          .join(" ")
+          .trim();
 
-      if (messageTextToProcess) {
-        try {
-          const { text: summarizedText } = await generateText({
-            system:
-              "You are a helpful assistant that summarizes text, compressing it into an informationally dense summary with maximum specificity and minimum words. Use sentence fragments if appropriate. Respond only with the compressed text, no other text.",
-            model: vercelOpenAI("gpt-4.1-nano"),
-            prompt: `Text: ${messageTextToProcess}`,
-          });
-          compressedConversationPayload.push({
-            role: msg.role,
-            content: summarizedText,
-          });
-          embeddingSourceMaterial.push(`${msg.role}: ${summarizedText}`);
-        } catch (summaryError) {
-          console.error(
-            `Error summarizing message part for msg id ${msg.id}:`,
-            summaryError
-          );
-          embeddingSourceMaterial.push(`${msg.role}: ${messageTextToProcess}`);
+        if (messageTextToProcess) {
+          return {
+            index,
+            msg,
+            messageTextToProcess,
+            task: generateText({
+              system:
+                "You are a helpful assistant that summarizes text, compressing it into an informationally dense summary with maximum specificity and minimum words. Use sentence fragments if appropriate. Respond only with the compressed text, no other text.",
+              model: vercelOpenAI("gpt-4.1-nano"),
+              prompt: `Text: ${messageTextToProcess}`,
+            })
+          };
         }
+        return null;
+      })
+      .filter((task): task is NonNullable<typeof task> => task !== null);
+
+    // Execute all summarization tasks in parallel
+    const summarizationResults = await Promise.allSettled(
+      summarizationTasks.map(task => task.task)
+    );
+
+    // Process results in original order
+    for (let i = 0; i < summarizationTasks.length; i++) {
+      const { msg, messageTextToProcess } = summarizationTasks[i];
+      const result = summarizationResults[i];
+
+      if (result.status === 'fulfilled') {
+        const summarizedText = result.value.text;
+        compressedConversationPayload.push({
+          role: msg.role,
+          content: summarizedText,
+        });
+        embeddingSourceMaterial.push(`${msg.role}: ${summarizedText}`);
+      } else {
+        console.error(
+          `Error summarizing message part for msg id ${msg.id}:`,
+          result.reason
+        );
+        embeddingSourceMaterial.push(`${msg.role}: ${messageTextToProcess}`);
       }
-      // Tool invocations and messages without text are now implicitly excluded from both
-      // compressedConversationPayload and embeddingSourceMaterial
     }
 
     const contentForEmbedding = embeddingSourceMaterial.join("\\n");

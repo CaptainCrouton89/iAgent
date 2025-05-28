@@ -8,7 +8,7 @@ import { z } from "zod";
  */
 export const memorySearchTool = tool({
   description:
-    "Search for previous conversations or memories using semantic similarity and optional date filtering. Supports pagination to browse through multiple results.",
+    "Search for previous conversations or memories using semantic similarity and optional date filtering. Supports pagination to browse through multiple results. Use 'deep' mode for full compressed conversations or 'shallow' mode for just titles and summaries.",
   parameters: z.object({
     query: z.string().optional().describe("The search query to find relevant memories (optional - leave empty to search all memories in date range)"),
     threshold: z
@@ -36,8 +36,12 @@ export const memorySearchTool = tool({
       .string()
       .optional()
       .describe("End date for search range (ISO format or relative like 'today')"),
+    searchMode: z
+      .enum(["deep", "shallow"])
+      .default("deep")
+      .describe("Search mode: 'deep' returns full compressed conversations, 'shallow' returns only titles and summaries"),
   }),
-  execute: async ({ query, threshold = 0.6, limit = 10, page = 1, startDate, endDate }) => {
+  execute: async ({ query, threshold = 0.6, limit = 10, page = 1, startDate, endDate, searchMode = "deep" }) => {
     try {
       // Parse relative dates if provided
       let parsedStartDate: Date | undefined;
@@ -72,21 +76,30 @@ export const memorySearchTool = tool({
       const memoriesOutput = result.memories
         .map((memory, index) => {
           const absoluteIndex = (page - 1) * limit + index + 1;
-          let messageContent = "[Compressed content not available or invalid]"; // Default message
-          if (
-            Array.isArray(memory.compressed_conversation) &&
-            memory.compressed_conversation.length > 0
-          ) {
-            messageContent = memory.compressed_conversation
-              .map(
-                (compressedMsg: { role: string; content: string }, msgIndex: number) =>
-                  `[${msgIndex}] ${compressedMsg.role === "user" ? "Silas" : "You"}: ${
-                    compressedMsg.content
-                  }`
-              )
-              .join("\\n");
+          let messageContent = "";
+          
+          if (searchMode === "shallow") {
+            // Shallow mode: return only title and summary
+            const title = memory.title || "Untitled Memory";
+            const summary = memory.summary || "No summary available";
+            messageContent = `Title: ${title}\nSummary: ${summary}`;
+          } else {
+            // Deep mode: return compressed conversation (existing behavior)
+            messageContent = "[Compressed content not available or invalid]"; // Default message
+            if (
+              Array.isArray(memory.compressed_conversation) &&
+              memory.compressed_conversation.length > 0
+            ) {
+              messageContent = memory.compressed_conversation
+                .map(
+                  (compressedMsg: { role: string; content: string }, msgIndex: number) =>
+                    `[${msgIndex}] ${compressedMsg.role === "user" ? "Silas" : "You"}: ${
+                      compressedMsg.content
+                    }`
+                )
+                .join("\\n");
+            }
           }
-          // Fallbacks to memory.content are removed as per user request
 
           return `Memory ${absoluteIndex} [ID: ${memory.id}] (${formatRelativeTime(
             memory.created_at

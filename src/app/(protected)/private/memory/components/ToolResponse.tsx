@@ -9,6 +9,7 @@ interface SearchMemoriesArgs {
   startDate?: string;
   endDate?: string;
   page?: number;
+  searchMode?: "deep" | "shallow";
 }
 
 interface InspectMemoryArgs {
@@ -137,6 +138,11 @@ function renderSearchMemoriesTool(toolInvocation: ToolInvocation) {
           {args.page !== undefined && (
             <p className="text-xs text-muted-foreground mt-1">
               Page: {args.page}
+            </p>
+          )}
+          {args.searchMode && (
+            <p className="text-xs text-muted-foreground mt-1">
+              Search Mode: {args.searchMode}
             </p>
           )}
           <p className="text-sm font-medium mt-2">Memory Search Results:</p>

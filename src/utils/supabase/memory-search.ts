@@ -12,6 +12,8 @@ export interface MemorySearchResult {
   content: Message[]; // This will be the full message array in JSON format
   compressed_conversation: { role: string; content: string }[] | null;
   context: string | null;
+  title: string | null;
+  summary: string | null;
   created_at: string;
   similarity: number;
 }
@@ -61,7 +63,7 @@ export async function searchMemories(
       // Then get paginated results
       const { data, error } = await supabase
         .from("memories")
-        .select("id, content, compressed_conversation, context, created_at")
+        .select("id, content, compressed_conversation, context, title, summary, created_at")
         .gte("created_at", startDate?.toISOString() || "1970-01-01")
         .lte("created_at", endDate?.toISOString() || new Date().toISOString())
         .order("created_at", { ascending: false })
