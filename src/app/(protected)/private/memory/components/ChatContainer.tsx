@@ -1,4 +1,4 @@
-import { Message } from "@ai-sdk/react";
+import { Message } from "@/types/chat";
 import { useEffect, useRef } from "react";
 import { EditableMessage } from "./EditableMessage";
 

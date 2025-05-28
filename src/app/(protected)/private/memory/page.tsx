@@ -7,13 +7,10 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Message, useChat } from "@ai-sdk/react";
+import { useMemoryChat } from "@/hooks/useMemoryChat";
+import { Message } from "@/types/chat";
 import { useCallback, useEffect, useState } from "react";
 import { ChatContainer, ChatInput, SaveConversationButton } from "./components";
-
-interface SystemInfoArgs {
-  type: string;
-}
 
 export default function MemoryChatPage() {
   const {
@@ -25,19 +22,16 @@ export default function MemoryChatPage() {
     setMessages,
     reload,
     setInput,
-  } = useChat({
+  } = useMemoryChat({
     api: "/api/memory-chat",
-    maxSteps: 5,
-    async onToolCall({ toolCall }) {
-      if (toolCall.toolName === "getSystemInfo") {
-        const args = toolCall.args as SystemInfoArgs;
-        return `Custom client-side system info for ${args.type}`;
-      }
-    },
   });
 
   const [interactionLessons, setInteractionLessons] = useState<string[]>([]);
   const [emotionHistory, setEmotionHistory] = useState<string[]>([]);
+  const [pendingConsciousThought, setPendingConsciousThought] = useState<{
+    thought: string;
+    forMessageId: string;
+  } | null>(null);
 
   useEffect(() => {
     const fetchLessons = async () => {
@@ -124,6 +118,15 @@ export default function MemoryChatPage() {
       event.preventDefault();
       if (!input) return;
 
+      // Check if there's a pending conscious thought to inject
+      let consciousThought = null;
+      if (pendingConsciousThought?.thought) {
+        consciousThought = pendingConsciousThought.thought;
+        console.log("Found pending conscious thought to send:", consciousThought);
+        // Clear the pending thought after using it
+        setPendingConsciousThought(null);
+      }
+
       const newMessage: Message = {
         id: Date.now().toString(), // Temporary ID, useChat will assign a proper one
         role: "user" as const,
@@ -171,6 +174,28 @@ export default function MemoryChatPage() {
           if (consciousThoughtResponse.ok) {
             const consciousThoughtData = await consciousThoughtResponse.json();
             console.log("Conscious thought response:", consciousThoughtData);
+            
+            // Format and store the conscious thought
+            const thoughts: string[] = [];
+            if (consciousThoughtData.logicalThought) {
+              thoughts.push(`Logical: ${consciousThoughtData.logicalThought.join(' → ')}`);
+            }
+            if (consciousThoughtData.creativeThought) {
+              thoughts.push(`Creative: ${consciousThoughtData.creativeThought.join(' → ')}`);
+            }
+            
+            if (thoughts.length > 0) {
+              // Find the last assistant message ID
+              const lastAssistantMessage = [...messages].reverse().find(m => m.role === 'assistant');
+              if (lastAssistantMessage) {
+                const thoughtContent = thoughts.join('\n');
+                console.log("Setting pending conscious thought:", thoughtContent);
+                setPendingConsciousThought({
+                  thought: thoughtContent,
+                  forMessageId: lastAssistantMessage.id
+                });
+              }
+            }
           } else {
             console.error(
               "Failed to fetch conscious thought:",
@@ -187,6 +212,7 @@ export default function MemoryChatPage() {
         body: {
           currentEmotion: newEmotion,
           interactionLessons,
+          consciousThought,
         },
       });
     },
@@ -198,6 +224,7 @@ export default function MemoryChatPage() {
       setInput,
       emotionHistory,
       setEmotionHistory,
+      pendingConsciousThought,
     ]
   );
 

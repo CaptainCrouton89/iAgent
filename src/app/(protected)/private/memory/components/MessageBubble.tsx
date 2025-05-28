@@ -1,5 +1,6 @@
-import { Message } from "@ai-sdk/react";
+import { Message } from "@/types/chat";
 import Markdown from "markdown-to-jsx";
+import { ToolResponse } from "./ToolResponse";
 
 interface MessageBubbleProps {
   message: Message;
@@ -10,6 +11,39 @@ const markdownOptions = {
 };
 
 export function MessageBubble({ message }: MessageBubbleProps) {
+  const renderContent = () => {
+    if (message.parts && message.parts.length > 0) {
+      return message.parts.map((part, i) => {
+        if (part.type === "text") {
+          return (
+            <div key={i} className="markdown-content">
+              <Markdown options={markdownOptions}>{part.text}</Markdown>
+            </div>
+          );
+        }
+
+        if (part.type === "tool-invocation") {
+          return (
+            <ToolResponse key={i} toolInvocation={part.toolInvocation} />
+          );
+        }
+
+        return null;
+      });
+    }
+    
+    // Fallback to content if no parts
+    if (message.content) {
+      return (
+        <div className="markdown-content">
+          <Markdown options={markdownOptions}>{message.content}</Markdown>
+        </div>
+      );
+    }
+    
+    return null;
+  };
+
   return (
     <div
       className={`flex ${
@@ -23,24 +57,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
             : "bg-muted"
         }`}
       >
-        {message.parts &&
-          message.parts.map((part, i) => {
-            if (part.type === "text") {
-              return (
-                <div key={i} className="markdown-content">
-                  <Markdown options={markdownOptions}>{part.text}</Markdown>
-                </div>
-              );
-            }
-
-            // if (part.type === "tool-invocation") {
-            //   return (
-            //     <ToolResponse key={i} toolInvocation={part.toolInvocation} />
-            //   );
-            // }
-
-            return null;
-          })}
+        {renderContent()}
       </div>
     </div>
   );

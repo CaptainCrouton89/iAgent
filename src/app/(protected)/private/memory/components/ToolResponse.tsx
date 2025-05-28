@@ -1,3 +1,5 @@
+import { ToolInvocation } from "@/types/chat";
+
 interface SystemInfoArgs {
   type: string;
 }
@@ -16,14 +18,6 @@ interface InspectMemoryArgs {
   memoryId: string;
   startIndex?: number;
   endIndex?: number;
-}
-
-interface ToolInvocation {
-  toolCallId: string;
-  toolName: string;
-  state: "call" | "result" | "partial-call";
-  args: unknown;
-  result?: string;
 }
 
 interface ToolResponseProps {
@@ -66,7 +60,7 @@ function renderSystemInfoTool(toolInvocation: ToolInvocation) {
     case "result":
       return (
         <div key={callId} className="my-2 p-2 border rounded bg-accent/20">
-          <p>System info: {toolInvocation.result}</p>
+          <p>System info: {String(toolInvocation.result)}</p>
         </div>
       );
     case "partial-call":
@@ -147,7 +141,7 @@ function renderSearchMemoriesTool(toolInvocation: ToolInvocation) {
           )}
           <p className="text-sm font-medium mt-2">Memory Search Results:</p>
           <pre className="text-xs whitespace-pre-wrap mt-1">
-            {toolInvocation.result || "No result provided."}
+            {String(toolInvocation.result || "No result provided.")}
           </pre>
         </div>
       );
@@ -201,7 +195,7 @@ function renderInspectMemoryTool(toolInvocation: ToolInvocation) {
               )}
             </summary>
             <pre className="text-xs whitespace-pre-wrap mt-2 p-2 bg-background rounded">
-              {toolInvocation.result || "No result provided."}
+              {String(toolInvocation.result || "No result provided.")}
             </pre>
           </details>
         </div>

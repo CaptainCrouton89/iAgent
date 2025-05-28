@@ -1,4 +1,4 @@
-import { Message } from "@ai-sdk/react";
+import { Message } from "@/types/chat";
 import { KeyboardEvent, useEffect, useRef, useState } from "react";
 import Markdown from "markdown-to-jsx";
 import { ToolResponse } from "./ToolResponse";

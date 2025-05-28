@@ -81,6 +81,7 @@ pnpm dlx shadcn@latest add [component-name]
 - **Searching**: Semantic similarity search returns memories with IDs
 - **Inspecting**: Full transcript access via memory ID
 - **Format**: Memory IDs shown as `[ID: uuid]` in search results
+- **Developer Messages**: OpenAI SDK supports developer role messages for internal thoughts injection
 
 ### Database Patterns
 

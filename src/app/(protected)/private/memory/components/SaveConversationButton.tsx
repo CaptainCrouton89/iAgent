@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { Message } from "@ai-sdk/react";
+import { Message } from "@/types/chat";
 import { BookmarkIcon } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";

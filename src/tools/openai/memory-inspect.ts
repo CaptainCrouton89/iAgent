@@ -1,0 +1,142 @@
+import { createClient } from "@/utils/supabase/server";
+import { ChatCompletionTool } from "openai/resources/chat/completions";
+import { MemoryInspectParameters } from "@/types/openai-chat";
+
+export const memoryInspectToolDefinition: ChatCompletionTool = {
+  type: "function",
+  function: {
+    name: "inspectMemory",
+    description:
+      "Inspect the raw conversation transcript of a specific memory by its ID. Returns the full message history with all details.",
+    parameters: {
+      type: "object",
+      properties: {
+        memoryId: {
+          type: "string",
+          description: "The ID of the memory to inspect",
+        },
+        startIndex: {
+          type: "number",
+          description: "Starting index of messages to retrieve (0-based)",
+          minimum: 0,
+        },
+        endIndex: {
+          type: "number",
+          description: "Ending index of messages to retrieve (inclusive)",
+          minimum: 0,
+        },
+      },
+      required: ["memoryId"],
+    },
+  },
+};
+
+export async function executeMemoryInspect(params: MemoryInspectParameters): Promise<string> {
+  try {
+    const { memoryId, startIndex, endIndex } = params;
+    
+    const supabase = await createClient();
+    
+    // Get the current user
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      return "Authentication error: Unable to verify user.";
+    }
+    
+    console.log("Inspecting memory with ID:", memoryId, "for user:", user.id);
+
+    // Fetch the memory by ID
+    const { data: memory, error } = await supabase
+      .from("memories")
+      .select("id, content, compressed_conversation, context, created_at, strength")
+      .eq("id", memoryId)
+      .eq("auth_id", user.id)
+      .single();
+
+    if (error || !memory) {
+      console.error("Error fetching memory:", error);
+      return `Memory with ID ${memoryId} not found or access denied. Error: ${error?.message || 'No memory found'}`;
+    }
+    
+    // Update memory usage - boost strength and update last_used
+    const newStrength = Math.min(1.0, (memory.strength || 0.5) + 0.1);
+    const { error: updateError } = await supabase
+      .from("memories")
+      .update({
+        last_used: new Date().toISOString(),
+        strength: newStrength,
+      })
+      .eq("id", memoryId)
+      .eq("auth_id", user.id);
+      
+    if (updateError) {
+      console.error("Error updating memory usage:", updateError);
+      // Continue even if update fails
+    }
+
+    // Parse the content field
+    let messages = [];
+    try {
+      if (Array.isArray(memory.content)) {
+        messages = memory.content;
+      } else if (typeof memory.content === 'string') {
+        messages = JSON.parse(memory.content);
+      } else {
+        return "Invalid memory content format.";
+      }
+    } catch {
+      return "Error parsing memory content.";
+    }
+
+    // Apply index filtering if provided
+    const start = startIndex ?? 0;
+    const end = endIndex ?? messages.length - 1;
+    
+    if (start > messages.length - 1 || end > messages.length - 1) {
+      return `Invalid index range. Memory contains ${messages.length} messages (indices 0-${messages.length - 1}).`;
+    }
+
+    const selectedMessages = messages.slice(start, end + 1);
+
+    // Format the output
+    let output = `Memory ID: ${memory.id}\n`;
+    output += `Created: ${new Date(memory.created_at).toLocaleString()}\n`;
+    output += `Total Messages: ${messages.length}\n`;
+    output += `Showing: Messages ${start}-${end}\n`;
+    if (memory.context) {
+      output += `Context: ${memory.context}\n`;
+    }
+    output += `\n--- Conversation Transcript ---\n\n`;
+
+    selectedMessages.forEach((message: { role?: string; parts?: Array<{ type: string; text?: string; toolCall?: { toolName: string; args: unknown }; toolResult?: { toolName: string; result: unknown } }>; content?: string }, index: number) => {
+      const actualIndex = start + index;
+      output += `[Message ${actualIndex}] ${message.role?.toUpperCase() || 'UNKNOWN'}:\n`;
+      
+      if (message.parts && Array.isArray(message.parts)) {
+        message.parts.forEach((part) => {
+          if (part.type === 'text' && part.text) {
+            output += `${part.text}\n`;
+          } else if (part.type === 'tool-call' && part.toolCall) {
+            output += `[Tool Call: ${part.toolCall.toolName}]\n`;
+            output += `Args: ${JSON.stringify(part.toolCall.args, null, 2)}\n`;
+          } else if (part.type === 'tool-result' && part.toolResult) {
+            output += `[Tool Result: ${part.toolResult.toolName}]\n`;
+            output += `Result: ${typeof part.toolResult.result === 'string' 
+              ? part.toolResult.result 
+              : JSON.stringify(part.toolResult.result, null, 2)}\n`;
+          }
+        });
+      } else if (message.content) {
+        // Fallback for simple message format
+        output += `${message.content}\n`;
+      }
+      
+      output += `\n`;
+    });
+
+    return output;
+  } catch (error) {
+    console.error("Error inspecting memory:", error);
+    return "Error inspecting memory. Please try again.";
+  }
+}
