@@ -151,6 +151,8 @@ export type Database = {
           created_at: string
           embedding: string | null
           id: string
+          summary: string
+          title: string
         }
         Insert: {
           auth_id?: string
@@ -160,6 +162,8 @@ export type Database = {
           created_at?: string
           embedding?: string | null
           id?: string
+          summary?: string
+          title?: string
         }
         Update: {
           auth_id?: string
@@ -169,6 +173,8 @@ export type Database = {
           created_at?: string
           embedding?: string | null
           id?: string
+          summary?: string
+          title?: string
         }
         Relationships: []
       }
@@ -413,6 +419,23 @@ export type Database = {
           query_embedding: string
           match_threshold?: number
           match_count?: number
+        }
+        Returns: {
+          id: string
+          content: Json
+          compressed_conversation: Json
+          context: string
+          created_at: string
+          similarity: number
+        }[]
+      }
+      search_memories_by_date: {
+        Args: {
+          query_embedding: string
+          match_threshold?: number
+          match_count?: number
+          start_date?: string
+          end_date?: string
         }
         Returns: {
           id: string

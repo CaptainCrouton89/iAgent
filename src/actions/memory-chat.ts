@@ -3,9 +3,10 @@
 import { createClient } from "@/utils/supabase/server";
 import { openai as vercelOpenAI } from "@ai-sdk/openai";
 import { Message } from "@ai-sdk/react";
-import { generateText } from "ai";
+import { generateText, generateObject } from "ai";
 import { revalidatePath } from "next/cache";
 import OpenAI from "openai";
+import { z } from "zod";
 
 // Initialize OpenAI client for embeddings
 const openaiEmbeddings = new OpenAI({
@@ -15,6 +16,59 @@ const openaiEmbeddings = new OpenAI({
 interface CompressedMessage {
   role: string;
   content: string;
+}
+
+// Schema for title and summary generation
+const titleSummarySchema = z.object({
+  title: z
+    .string()
+    .describe("A concise, descriptive title for the conversation"),
+  summary: z
+    .string()
+    .describe("A 1-2 sentence summary of the conversation content"),
+});
+
+// Function to generate title and summary for a conversation
+async function generateTitleAndSummary(messages: Message[]): Promise<{title: string, summary: string}> {
+  try {
+    // Extract text content from messages for analysis
+    const conversationText = messages
+      .map((msg) => {
+        if (msg.parts) {
+          const textContent = msg.parts
+            .map((part) => part.type === "text" ? part.text : "")
+            .filter(text => text.trim())
+            .join(" ");
+          return textContent ? `${msg.role}: ${textContent}` : "";
+        }
+        return msg.content ? `${msg.role}: ${msg.content}` : "";
+      })
+      .filter(line => line.trim())
+      .join("\n");
+
+    if (!conversationText.trim()) {
+      return {
+        title: "Conversation",
+        summary: "A conversation between user and assistant.",
+      };
+    }
+
+    const { object } = await generateObject({
+      model: vercelOpenAI("gpt-4.1-mini"),
+      schema: titleSummarySchema,
+      prompt: `Analyze this conversation and generate a title and summary:\n\n${conversationText}`,
+      system: "You are analyzing a conversation to create a meaningful title and brief summary. The title should be concise and descriptive. The summary should be 1-2 sentences capturing the main topics or themes discussed.",
+      temperature: 0.3,
+    });
+
+    return object;
+  } catch (error) {
+    console.error("Error generating title and summary:", error);
+    return {
+      title: "Conversation",
+      summary: "A conversation between user and assistant.",
+    };
+  }
 }
 
 export async function saveConversation(originalMessages: Message[]) {
@@ -85,10 +139,15 @@ export async function saveConversation(originalMessages: Message[]) {
       );
     }
 
+    // Generate title and summary for the conversation
+    const { title, summary } = await generateTitleAndSummary(originalMessages);
+
     const { error } = await supabase.from("memories").insert({
       content: originalMessages,
       compressed_conversation: compressedConversationPayload,
       embedding, // This can be null if no content was embeddable
+      title,
+      summary,
       auth_id: user.id,
     });
 

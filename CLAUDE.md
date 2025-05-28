@@ -40,6 +40,7 @@ pnpm dlx shadcn@latest add [component-name]
 - **Semantic Search**: PostgreSQL with pgvector extension for similarity search
 - **Memory Clustering**: Automatic grouping of related memories
 - **Persistence**: Conversation saving with embedding generation
+- **Auto-Metadata**: Automatic title and summary generation using GPT-4.1-mini for improved memory retrieval
 
 ### Stream-Based Communication
 
@@ -76,7 +77,7 @@ pnpm dlx shadcn@latest add [component-name]
 
 ### Memory System
 
-- **Saving**: Conversations saved with embeddings and compression
+- **Saving**: Conversations saved with embeddings, compression, and auto-generated metadata
 - **Searching**: Semantic similarity search returns memories with IDs
 - **Inspecting**: Full transcript access via memory ID
 - **Format**: Memory IDs shown as `[ID: uuid]` in search results

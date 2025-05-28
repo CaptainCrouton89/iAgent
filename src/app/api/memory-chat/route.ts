@@ -1,4 +1,4 @@
-import { memorySearchTool, memoryInspectTool } from "@/tools";
+import { memoryInspectTool, memorySearchTool } from "@/tools";
 import { openai } from "@ai-sdk/openai";
 import { CoreMessage, streamText } from "ai";
 

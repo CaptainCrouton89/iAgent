@@ -6,6 +6,8 @@ This directory contains all API endpoints for the iAgent system. All routes use 
 
 ### Memory System (`/memory`, `/memory-chat`)
 - **`/memory`**: Saves conversations with embeddings and compression
+  - Auto-generates titles and summaries using GPT-4.1-mini
+  - Stores structured memory data with title/summary fields
 - **`/memory-chat`**: Chat interface with memory augmentation
   - Uses `memorySearchTool` and `memoryInspectTool`
   - Implements conversational partner personality
