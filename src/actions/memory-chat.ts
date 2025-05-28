@@ -172,6 +172,7 @@ export async function saveConversation(originalMessages: Message[]) {
       title,
       summary,
       auth_id: user.id,
+      created_at: new Date().toISOString(), // Store in UTC (this is correct)
     });
 
     if (error) {

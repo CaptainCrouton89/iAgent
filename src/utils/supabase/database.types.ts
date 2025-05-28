@@ -151,6 +151,10 @@ export type Database = {
           created_at: string
           embedding: string | null
           id: string
+          label: string | null
+          last_used: string
+          pinned: boolean
+          strength: number
           summary: string
           title: string
         }
@@ -162,6 +166,10 @@ export type Database = {
           created_at?: string
           embedding?: string | null
           id?: string
+          label?: string | null
+          last_used?: string
+          pinned?: boolean
+          strength?: number
           summary?: string
           title?: string
         }
@@ -173,6 +181,10 @@ export type Database = {
           created_at?: string
           embedding?: string | null
           id?: string
+          label?: string | null
+          last_used?: string
+          pinned?: boolean
+          strength?: number
           summary?: string
           title?: string
         }

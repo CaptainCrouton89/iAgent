@@ -164,14 +164,23 @@ function parseRelativeDate(dateStr: string): Date {
 
   // Parse relative dates
   if (trimmed === "today") {
-    return new Date(now.setHours(0, 0, 0, 0));
+    const today = new Date(now);
+    today.setHours(23, 59, 59, 999); // End of today
+    return today;
   }
 
   if (trimmed === "yesterday") {
     const yesterday = new Date(now);
     yesterday.setDate(yesterday.getDate() - 1);
-    yesterday.setHours(0, 0, 0, 0);
+    yesterday.setHours(0, 0, 0, 0); // Start of yesterday
     return yesterday;
+  }
+
+  if (trimmed === "tomorrow") {
+    const tomorrow = new Date(now);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(23, 59, 59, 999); // End of tomorrow
+    return tomorrow;
   }
 
   // Parse "X days/weeks/months ago" format
