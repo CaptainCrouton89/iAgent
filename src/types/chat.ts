@@ -29,11 +29,12 @@ export interface ChatRequestBody {
 export type ChatStatus = "ready" | "loading" | "error";
 
 export interface StreamEvent {
-  type: "text-delta" | "tool-call-streaming-start" | "tool-call-delta" | "tool-result" | "finish" | "error";
+  type: "text-delta" | "tool-call-streaming-start" | "tool-call-delta" | "tool-call-complete" | "tool-result" | "finish" | "error";
   textDelta?: string;
   toolCallId?: string;
   toolName?: string;
   argsTextDelta?: string;
+  args?: unknown;
   result?: unknown;
   finishReason?: string;
   error?: string;

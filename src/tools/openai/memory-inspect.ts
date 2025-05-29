@@ -7,7 +7,7 @@ export const memoryInspectToolDefinition: ChatCompletionTool = {
   function: {
     name: "inspectMemory",
     description:
-      "Inspect the raw conversation transcript of a specific memory by its ID. Returns the full message history with all details.",
+      "Inspect the raw conversation transcript of a specific memory by its ID. Enhanced to extract evidence for hypothesis testing and reasoning. Returns the full message history with all details.",
     parameters: {
       type: "object",
       properties: {
@@ -25,15 +25,24 @@ export const memoryInspectToolDefinition: ChatCompletionTool = {
           description: "Ending index of messages to retrieve (inclusive)",
           minimum: 0,
         },
+        reasoningContext: {
+          type: "string",
+          description: "Current reasoning context or hypothesis being investigated",
+        },
+        extractEvidence: {
+          type: "boolean",
+          description: "Whether to highlight evidence relevant to current reasoning context",
+          default: false,
+        },
       },
       required: ["memoryId"],
     },
   },
 };
 
-export async function executeMemoryInspect(params: MemoryInspectParameters): Promise<string> {
+export async function executeMemoryInspect(params: MemoryInspectParameters & { reasoningContext?: string; extractEvidence?: boolean }): Promise<string> {
   try {
-    const { memoryId, startIndex, endIndex } = params;
+    const { memoryId, startIndex, endIndex, reasoningContext, extractEvidence } = params;
     
     const supabase = await createClient();
     
@@ -98,7 +107,7 @@ export async function executeMemoryInspect(params: MemoryInspectParameters): Pro
 
     const selectedMessages = messages.slice(start, end + 1);
 
-    // Format the output
+    // Format the output with reasoning enhancements
     let output = `Memory ID: ${memory.id}\n`;
     output += `Created: ${new Date(memory.created_at).toLocaleString()}\n`;
     output += `Total Messages: ${messages.length}\n`;
@@ -106,33 +115,66 @@ export async function executeMemoryInspect(params: MemoryInspectParameters): Pro
     if (memory.context) {
       output += `Context: ${memory.context}\n`;
     }
+    if (reasoningContext) {
+      output += `Reasoning Context: ${reasoningContext}\n`;
+    }
+    if (extractEvidence) {
+      output += `Evidence Extraction: Enabled\n`;
+    }
     output += `\n--- Conversation Transcript ---\n\n`;
 
     selectedMessages.forEach((message: { role?: string; parts?: Array<{ type: string; text?: string; toolCall?: { toolName: string; args: unknown }; toolResult?: { toolName: string; result: unknown } }>; content?: string }, index: number) => {
       const actualIndex = start + index;
-      output += `[Message ${actualIndex}] ${message.role?.toUpperCase() || 'UNKNOWN'}:\n`;
+      let messageContent = '';
+      let evidenceFound = false;
       
+      // Extract message content
       if (message.parts && Array.isArray(message.parts)) {
         message.parts.forEach((part) => {
           if (part.type === 'text' && part.text) {
-            output += `${part.text}\n`;
+            messageContent += part.text;
+            
+            // Check for evidence if reasoning context provided
+            if (extractEvidence && reasoningContext && part.text.toLowerCase().includes(reasoningContext.toLowerCase().substring(0, 20))) {
+              evidenceFound = true;
+            }
           } else if (part.type === 'tool-call' && part.toolCall) {
-            output += `[Tool Call: ${part.toolCall.toolName}]\n`;
-            output += `Args: ${JSON.stringify(part.toolCall.args, null, 2)}\n`;
+            messageContent += `[Tool Call: ${part.toolCall.toolName}]\nArgs: ${JSON.stringify(part.toolCall.args, null, 2)}`;
           } else if (part.type === 'tool-result' && part.toolResult) {
-            output += `[Tool Result: ${part.toolResult.toolName}]\n`;
-            output += `Result: ${typeof part.toolResult.result === 'string' 
+            const resultContent = typeof part.toolResult.result === 'string' 
               ? part.toolResult.result 
-              : JSON.stringify(part.toolResult.result, null, 2)}\n`;
+              : JSON.stringify(part.toolResult.result, null, 2);
+            messageContent += `[Tool Result: ${part.toolResult.toolName}]\nResult: ${resultContent}`;
+            
+            // Check tool results for evidence
+            if (extractEvidence && reasoningContext && resultContent.toLowerCase().includes(reasoningContext.toLowerCase().substring(0, 20))) {
+              evidenceFound = true;
+            }
           }
         });
       } else if (message.content) {
-        // Fallback for simple message format
-        output += `${message.content}\n`;
+        messageContent = message.content;
+        if (extractEvidence && reasoningContext && message.content.toLowerCase().includes(reasoningContext.toLowerCase().substring(0, 20))) {
+          evidenceFound = true;
+        }
       }
       
-      output += `\n`;
+      // Format message with evidence highlighting
+      const evidenceMarker = evidenceFound ? ' 🎯 [EVIDENCE FOUND]' : '';
+      output += `[Message ${actualIndex}] ${message.role?.toUpperCase() || 'UNKNOWN'}${evidenceMarker}:\n`;
+      output += `${messageContent}\n\n`;
     });
+    
+    // Add evidence summary if extraction was enabled
+    if (extractEvidence && reasoningContext) {
+      const evidenceCount = selectedMessages.filter((msg: { role?: string; parts?: Array<{ type: string; text?: string; toolCall?: { toolName: string; args: unknown }; toolResult?: { toolName: string; result: unknown } }>; content?: string }) => {
+        const content = msg.content || msg.parts?.map(p => p.text || '').join(' ') || '';
+        return content.toLowerCase().includes(reasoningContext.toLowerCase().substring(0, 20));
+      }).length;
+      
+      output += `\n--- Evidence Summary ---\n`;
+      output += `Found ${evidenceCount} messages potentially relevant to: "${reasoningContext}"\n`;
+    }
 
     return output;
   } catch (error) {

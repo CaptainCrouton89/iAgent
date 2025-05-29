@@ -6,11 +6,13 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-export async function assessChatMode(messages: ChatCompletionMessageParam[]): Promise<string> {
+export async function assessChatMode(
+  messages: ChatCompletionMessageParam[]
+): Promise<string> {
   try {
     const lastMessage = messages[messages.length - 1];
-    if (!lastMessage || lastMessage.role !== 'user') {
-      return 'default';
+    if (!lastMessage || lastMessage.role !== "user") {
+      return "default";
     }
 
     const response = await openai.chat.completions.create({
@@ -18,14 +20,18 @@ export async function assessChatMode(messages: ChatCompletionMessageParam[]): Pr
       temperature: 0.1,
       messages: [
         { role: "system", content: MODE_ASSESSMENT_PROMPT },
-        { role: "user", content: lastMessage.content as string }
-      ]
+        { role: "user", content: lastMessage.content as string },
+      ],
     });
 
     const mode = response.choices[0]?.message?.content?.trim().toLowerCase();
-    return mode === 'brainstorm' ? 'brainstorm' : 'default';
+
+    // Validate and return the mode
+    const validModes = ["default", "brainstorm", "reflective", "action"];
+    console.log("mode", mode);
+    return mode && validModes.includes(mode) ? mode : "default";
   } catch (error) {
-    console.error('Error assessing chat mode:', error);
-    return 'default';
+    console.error("Error assessing chat mode:", error);
+    return "default";
   }
 }

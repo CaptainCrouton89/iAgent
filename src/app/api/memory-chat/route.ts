@@ -2,14 +2,14 @@ import {
   createOrUpdateSelfConcept,
   getSelfConcept,
 } from "@/actions/self-concept";
-import { memorySearchToolDefinition } from "@/tools/openai/memory-search";
-import { memoryInspectToolDefinition } from "@/tools/openai/memory-inspect";
+import { getToolsForMode, toolExecutors } from "./tool-sets";
 import { ChatCompletionMessageParam } from "openai/resources/chat/completions";
 import { assessChatMode } from "./mode-assessment";
-import { BASE_SYSTEM_PROMPT, BRAINSTORM_SYSTEM_PROMPT } from "./prompts";
+import { BASE_SYSTEM_PROMPT, BRAINSTORM_SYSTEM_PROMPT, REFLECTIVE_SYSTEM_PROMPT, ACTION_SYSTEM_PROMPT } from "./prompts";
 import { buildSystemPromptWithSelfConcept } from "./self-concept-builder";
 import { createMemoryChatStream } from "./stream-handler";
 import { ChatRequestBody } from "./types";
+import { processConsciousThought, createReasoningDeveloperMessage, extractMemorySearchContext } from "./reasoning-processor";
 
 // Allow streaming responses up to 30 seconds
 export const maxDuration = 30;
@@ -21,6 +21,7 @@ export async function POST(req: Request) {
       currentEmotion,
       interactionLessons,
       consciousThought,
+      reasoningContext,
     }: ChatRequestBody = await req.json();
 
     // Assess what mode to use
@@ -40,28 +41,49 @@ export async function POST(req: Request) {
       console.log("Created default self-concept with ID:", selfConcept.id);
     }
 
-    // Convert messages to ExtendedMessageParam type and inject conscious thought if provided
+    // Convert messages to ExtendedMessageParam type and inject enhanced conscious thought if provided
+    // Note: Action mode skips conscious thought processing for efficiency
     const processedMessages: ChatCompletionMessageParam[] = [...messages];
-    if (consciousThought) {
+    if (consciousThought && chatMode !== 'action') {
+      // Process conscious thought for structured reasoning
+      const processedThought = processConsciousThought(consciousThought, reasoningContext);
+      
+      // Create enhanced developer message with reasoning context
+      const reasoningContent = createReasoningDeveloperMessage(processedThought, reasoningContext);
+      
       // Add developer message right before the last user message
       const lastUserIndex = processedMessages.length - 1;
       const developerMessage: ChatCompletionMessageParam = {
         role: "developer",
-        content: `<internal_thoughts>${consciousThought}</internal_thoughts>`,
+        content: reasoningContent,
       };
       processedMessages.splice(lastUserIndex, 0, developerMessage);
-      console.log("Injected conscious thought:", consciousThought);
-      console.log(
-        "Messages with conscious thought:",
-        processedMessages.map((m) => ({
-          role: m.role,
-          content: m.content?.slice(0, 50) + "...",
-        }))
-      );
+      
+      console.log("Injected enhanced conscious thought with reasoning:", {
+        originalThought: consciousThought.slice(0, 100),
+        structuredThoughts: processedThought.structuredThoughts.length,
+        qualityScore: processedThought.qualityScore,
+        hasReasoningState: !!processedThought.reasoningState,
+        reasoningMode: reasoningContext?.mode
+      });
     }
 
     // Select base prompt based on mode
-    const basePrompt = chatMode === 'brainstorm' ? BRAINSTORM_SYSTEM_PROMPT : BASE_SYSTEM_PROMPT;
+    let basePrompt: string;
+    switch (chatMode) {
+      case 'brainstorm':
+        basePrompt = BRAINSTORM_SYSTEM_PROMPT;
+        break;
+      case 'reflective':
+        basePrompt = REFLECTIVE_SYSTEM_PROMPT;
+        break;
+      case 'action':
+        basePrompt = ACTION_SYSTEM_PROMPT;
+        break;
+      default:
+        basePrompt = BASE_SYSTEM_PROMPT;
+        break;
+    }
 
     // Build dynamic system prompt with self-concept
     const dynamicSystemPrompt = buildSystemPromptWithSelfConcept(
@@ -74,11 +96,23 @@ export async function POST(req: Request) {
     console.log("Emotion", currentEmotion);
     console.log("Self-concept loaded:", selfConcept ? "Yes" : "No");
 
-    // Create and return the streaming response
+    // Extract memory search context for enhanced tool usage (skip for action mode)
+    const memoryContext = (consciousThought && chatMode !== 'action') ? 
+      extractMemorySearchContext(
+        processConsciousThought(consciousThought, reasoningContext).reasoningState,
+        reasoningContext
+      ) : undefined;
+    
+    // Get tools based on mode
+    const toolDefinitions = getToolsForMode(chatMode);
+    
+    // Create and return the streaming response with enhanced context
     const readableStream = await createMemoryChatStream(
       dynamicSystemPrompt,
       processedMessages,
-      [memorySearchToolDefinition, memoryInspectToolDefinition]
+      toolDefinitions,
+      toolExecutors,
+      memoryContext
     );
 
     return new Response(readableStream, {

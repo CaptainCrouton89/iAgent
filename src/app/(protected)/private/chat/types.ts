@@ -12,7 +12,7 @@ export type ToolResult = {
 
 export type ContentItem =
   | { type: "text"; text: string }
-  | { type: "tool-call"; toolCallId: string; toolName: string; args: ToolArgs }
+  | { type: "tool-call"; toolCallId: string; toolName: string; args?: ToolArgs }
   | {
       type: "tool-result";
       toolCallId: string;

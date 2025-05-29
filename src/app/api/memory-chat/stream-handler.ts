@@ -2,6 +2,9 @@ import { OpenAI } from "openai";
 import { ChatCompletionMessageParam, ChatCompletionTool } from "openai/resources/chat/completions";
 import { executeMemorySearch } from "@/tools/openai/memory-search";
 import { executeMemoryInspect } from "@/tools/openai/memory-inspect";
+import { MemorySearchContext } from "./types";
+
+type ToolExecutor = (args: Record<string, unknown>) => Promise<string>;
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -10,7 +13,10 @@ const openai = new OpenAI({
 export async function createMemoryChatStream(
   systemPrompt: string,
   messages: ChatCompletionMessageParam[],
-  toolDefinitions: ChatCompletionTool[]
+  toolDefinitions: ChatCompletionTool[],
+  toolExecutors: Record<string, ToolExecutor> = {},
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _memoryContext?: MemorySearchContext
 ): Promise<ReadableStream> {
   // Create the streaming chat completion
   const stream = await openai.chat.completions.create({
@@ -132,9 +138,23 @@ export async function createMemoryChatStream(
                   result = await executeMemorySearch(args);
                 } else if (toolCall.name === "inspectMemory") {
                   result = await executeMemoryInspect(args);
+                } else if (toolExecutors[toolCall.name]) {
+                  result = await toolExecutors[toolCall.name](args);
                 } else {
                   result = "Unknown tool";
                 }
+
+                // Send complete tool call with arguments before result
+                controller.enqueue(
+                  encoder.encode(
+                    `data: ${JSON.stringify({
+                      type: "tool-call-complete",
+                      toolCallId: toolCall.id,
+                      toolName: toolCall.name,
+                      args: args, // Send parsed args
+                    })}\n\n`
+                  )
+                );
 
                 // Send tool result to frontend
                 controller.enqueue(

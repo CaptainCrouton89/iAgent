@@ -24,15 +24,21 @@ const ToolCallContent = ({
   args,
 }: {
   toolName: string;
-  args: ToolArgs;
+  args: ToolArgs | undefined;
 }) => (
   <div className="border border-gray-200 rounded-md overflow-hidden">
     <div className="bg-blue-50 px-3 py-2 border-l-2 border-l-blue-500 font-medium text-sm text-blue-700">
       Tool Call: {toolName}
     </div>
-    <pre className="text-xs bg-white text-gray-800 p-3 m-0 overflow-x-auto border-t border-gray-200">
-      {JSON.stringify(args, null, 2)}
-    </pre>
+    {args && Object.keys(args).length > 0 ? (
+      <pre className="text-xs bg-white text-gray-800 p-3 m-0 overflow-x-auto border-t border-gray-200">
+        {JSON.stringify(args, null, 2)}
+      </pre>
+    ) : (
+      <div className="px-3 py-2 text-xs text-gray-500 border-t border-gray-200 bg-gray-50">
+        No arguments provided
+      </div>
+    )}
   </div>
 );
 

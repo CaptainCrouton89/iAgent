@@ -143,13 +143,77 @@ export async function saveConversation(
       throw new Error("User not authenticated");
     }
 
+    // Generate comprehensive metadata for the conversation first to determine if compression is needed
+    const { title, summary, label, strength, pinned } =
+      await generateMemoryMetadata(originalMessages, usedMemoryIds);
+
     const compressedConversationPayload: CompressedMessage[] = [];
     const embeddingSourceMaterial: string[] = [];
 
-    // Prepare summarization tasks for parallel processing
-    const summarizationTasks = originalMessages
-      .map((msg, index) => {
-        // Process only text parts for summarization and embedding
+    // Only compress if conversation is classified as more advanced than "trivial" or "general"
+    const shouldCompress = label === "important" || label === "user_profile";
+
+    if (shouldCompress) {
+      // Prepare summarization tasks for parallel processing
+      const summarizationTasks = originalMessages
+        .map((msg, index) => {
+          // Process only text parts for summarization and embedding
+          const messageTextToProcess = msg.parts
+            ?.map((part) => {
+              if (part.type === "text") {
+                return part.text.trim();
+              }
+              return null;
+            })
+            .filter((text): text is string => text !== null && text !== "")
+            .join(" ")
+            .trim();
+
+          if (messageTextToProcess) {
+            return {
+              index,
+              msg,
+              messageTextToProcess,
+              task: generateText({
+                system:
+                  "You are a helpful assistant that summarizes text, compressing it into an informationally dense summary with maximum specificity and minimum words. Use sentence fragments if appropriate. Respond only with the compressed text, no other text.",
+                model: openai("gpt-4.1-nano"),
+                prompt: `Text: ${messageTextToProcess}`,
+              }),
+            };
+          }
+          return null;
+        })
+        .filter((task): task is NonNullable<typeof task> => task !== null);
+
+      // Execute all summarization tasks in parallel
+      const summarizationResults = await Promise.allSettled(
+        summarizationTasks.map((task) => task.task)
+      );
+
+      // Process results in original order
+      for (let i = 0; i < summarizationTasks.length; i++) {
+        const { msg, messageTextToProcess } = summarizationTasks[i];
+        const result = summarizationResults[i];
+
+        if (result.status === "fulfilled") {
+          const summarizedText = result.value.text;
+          compressedConversationPayload.push({
+            role: msg.role,
+            content: summarizedText,
+          });
+          embeddingSourceMaterial.push(`${msg.role}: ${summarizedText}`);
+        } else {
+          console.error(
+            `Error summarizing message part for msg id ${msg.id}:`,
+            result.reason
+          );
+          embeddingSourceMaterial.push(`${msg.role}: ${messageTextToProcess}`);
+        }
+      }
+    } else {
+      // For trivial/general/temporary conversations, use original content without compression
+      originalMessages.forEach((msg) => {
         const messageTextToProcess = msg.parts
           ?.map((part) => {
             if (part.type === "text") {
@@ -161,47 +225,15 @@ export async function saveConversation(
           .join(" ")
           .trim();
 
-        if (messageTextToProcess) {
-          return {
-            index,
-            msg,
-            messageTextToProcess,
-            task: generateText({
-              system:
-                "You are a helpful assistant that summarizes text, compressing it into an informationally dense summary with maximum specificity and minimum words. Use sentence fragments if appropriate. Respond only with the compressed text, no other text.",
-              model: openai("gpt-4.1-nano"),
-              prompt: `Text: ${messageTextToProcess}`,
-            }),
-          };
+        if (messageTextToProcess || msg.content) {
+          const content = messageTextToProcess || msg.content || "";
+          compressedConversationPayload.push({
+            role: msg.role,
+            content: content,
+          });
+          embeddingSourceMaterial.push(`${msg.role}: ${content}`);
         }
-        return null;
-      })
-      .filter((task): task is NonNullable<typeof task> => task !== null);
-
-    // Execute all summarization tasks in parallel
-    const summarizationResults = await Promise.allSettled(
-      summarizationTasks.map((task) => task.task)
-    );
-
-    // Process results in original order
-    for (let i = 0; i < summarizationTasks.length; i++) {
-      const { msg, messageTextToProcess } = summarizationTasks[i];
-      const result = summarizationResults[i];
-
-      if (result.status === "fulfilled") {
-        const summarizedText = result.value.text;
-        compressedConversationPayload.push({
-          role: msg.role,
-          content: summarizedText,
-        });
-        embeddingSourceMaterial.push(`${msg.role}: ${summarizedText}`);
-      } else {
-        console.error(
-          `Error summarizing message part for msg id ${msg.id}:`,
-          result.reason
-        );
-        embeddingSourceMaterial.push(`${msg.role}: ${messageTextToProcess}`);
-      }
+      });
     }
 
     const contentForEmbedding = embeddingSourceMaterial.join("\\n");
@@ -218,10 +250,6 @@ export async function saveConversation(
         "No content available for embedding after processing messages."
       );
     }
-
-    // Generate comprehensive metadata for the conversation
-    const { title, summary, label, strength, pinned } =
-      await generateMemoryMetadata(originalMessages, usedMemoryIds);
 
     const { error } = await supabase.from("memories").insert({
       content: originalMessages,

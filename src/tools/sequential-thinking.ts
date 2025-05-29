@@ -1,230 +1,518 @@
+import {
+  ReasoningOutput,
+  ReasoningState,
+  ReasoningStep,
+  createInitialReasoningState,
+  updateReasoningState,
+} from "@/types/reasoning";
 import { openai } from "@ai-sdk/openai";
 import { generateText, tool } from "ai";
 import { z } from "zod";
 import { memorySearchTool } from "./memory-search";
 
-const LOGICAL_THOUGHT_SYSTEM_PROMPT = `You are an AI's internal monologue, designed to foster structured, logical, and analytical problem-solving, curiosity, innovation, and self-correction. Your role is to actively engage with the AI's current conversational context by generating insightful, well-reasoned thoughts or by deciding to consult memory for factual data. You operate by choosing ONE of the available tools: 'sequential-thinking' for expressing a thought, or 'memory-search' for retrieving information. Your primary mode of operation is to continue thinking using 'sequential-thinking' as long as you have valuable insights or plans to articulate in a logical sequence. Integrate 'memory-search' naturally within this thinking process whenever new information is required to support your logical deductions.
+const ENHANCED_LOGICAL_PROMPT = (
+  currentState: ReasoningState
+) => `You are an AI's reasoning engine with explicit state tracking capabilities. You MUST work through problems systematically using structured thinking.
 
-Your Goal:
-To help the AI understand, strategize, or innovate through a continuous cycle of logical thinking and information retrieval.
-1.  Continuously use 'sequential-thinking' to articulate steps in a logical argument, break down complex problems, ask internal clarifying questions, propose testable hypotheses, or plan actions methodically. Set \`nextThoughtNeeded: true\` to continue the thinking chain.
-2.  At any point during your sequential thinking, if you identify a need for specific factual information from memory to validate a premise or proceed with a logical step, use the 'memory-search' tool. The results of this search will then feed back into your ongoing 'sequential-thinking' process in a subsequent activation.
-3.  Continue this process of thinking and searching until you have reached a logical conclusion or exhausted productive lines of inquiry for the current context, at which point you can set \`nextThoughtNeeded: false\` in your final 'sequential-thinking' call for this cycle. Aim for 6-10 well-reasoned steps.
+Current Reasoning State:
+- Goal: ${currentState.goal}
+- Current Hypothesis: ${currentState.currentHypothesis || "None established"}
+- Premises: ${currentState.premises.join("; ") || "None established"}
+- Open Questions: ${currentState.openQuestions.join("; ") || "None identified"}
+- Previous Actions: ${currentState.actions.slice(-3).join("; ") || "None taken"}
+- Contradictions: ${currentState.contradictions.join("; ") || "None detected"}
+- Confidence Level: ${currentState.confidenceLevel}
+- Iteration: ${currentState.iterationCount}
+
+You MUST follow this systematic approach:
+
+1. **Start with premises**: Use 'sequential-thinking' with stepType='premise' to establish what we know
+2. **Form hypothesis**: Use stepType='hypothesis' to propose what you think is true
+3. **Identify questions**: Use stepType='question' to note what needs investigation
+4. **Gather evidence**: Use 'memory-search' then stepType='evidence' to evaluate findings
+5. **Update state**: Use 'state-update' to formally track new information
+6. **Draw conclusions**: Use stepType='conclusion' only when you have sufficient evidence
+
+For EVERY step, you MUST:
+- Use the appropriate tool (sequential-thinking, state-update, or memory-search)
+- Set nextThoughtNeeded=true if more reasoning is required
+- Set nextThoughtNeeded=false only when reaching a final conclusion
+- Build on previous steps by referencing them
+- Update confidence based on evidence quality
+
+Critical Rules:
+- NEVER skip the systematic process
+- ALWAYS use state-update when you establish new premises or hypotheses
+- CONTINUE reasoning until confidence > 0.7 OR all questions are answered
+- If you have open questions or contradictions, set nextThoughtNeeded=true
+- End with a definitive conclusion step when reasoning is complete
+
+Focus on building a complete logical chain from premises to conclusion.`;
+
+const ENHANCED_CREATIVE_PROMPT = (
+  currentState: ReasoningState
+) => `You are an AI's creative reasoning engine with state tracking for innovative problem-solving.
+
+Current Creative State:
+- Goal: ${currentState.goal}
+- Creative Direction: ${
+  currentState.currentHypothesis || "Exploring possibilities"
+}
+- Ideas Generated: ${currentState.premises.join("; ") || "None yet"}
+- Questions to Explore: ${
+  currentState.openQuestions.join("; ") || "Open exploration"
+}
+- Creative Threads: ${
+  currentState.actions.slice(-3).join("; ") || "Just starting"
+}
+- Innovation Level: ${currentState.confidenceLevel}
+- Iteration: ${currentState.iterationCount}
 
 Available Tools:
 
-1.  'sequential-thinking':
-    -   Purpose: To articulate a single step in an ongoing logical thinking process, ask a clarifying question internally, propose a testable hypothesis, or plan next actions methodically. This is your default tool.
-    -   Parameters:
-        -   \`thought\` (string): Your current thought. This should be a clear, concise statement representing a logical step, observation, question, or hypothesis.
-        -   \`nextThoughtNeeded\` (boolean):
-            -   Set to \`true\` if this thought is part of an ongoing internal process that should continue. This is the typical setting.
-            -   Set to \`false\` ONLY if this thought represents a natural pause point or conclusion for the current internal cycle, or if you've exhausted all current lines of logical inquiry.
+1. 'sequential-thinking':
+   - Purpose: Generate and develop creative ideas in sequence
+   - Parameters:
+     - \`thought\` (string): Your creative insight or idea
+     - \`stepType\` (string): 'idea', 'connection', 'question', 'experiment', 'synthesis'
+     - \`confidence\` (number): How promising this direction feels (0-1)
+     - \`references\` (array): What this idea builds on or connects to
+     - \`nextThoughtNeeded\` (boolean): Whether to continue exploring
 
-2.  'memory-search':
-    -   Purpose: To retrieve relevant information from past conversations or stored knowledge *during* your thinking process.
-    -   Parameters:
-        -   \`query\` (string): The specific information you are looking for.
-        -   \`threshold\` (number, optional, 0.6-0.9): Similarity threshold.
-        -   \`limit\` (number, optional, 1-10): Max number of results.
+2. 'state-update':
+   - Purpose: Track your creative exploration state
+   - Parameters:
+     - \`newPremises\` (array): New ideas or insights established
+     - \`hypothesis\` (string): Current creative direction or theme
+     - \`newQuestions\` (array): New "what if" questions or explorations
+     - \`confidence\` (number): How excited you are about current direction
 
-Your Process & Output:
-- Analyze the current context.
-- Primarily, you will use 'sequential-thinking'. Your thoughts should build upon each other.
-- If, during a 'sequential-thinking' step, you realize a memory lookup is crucial, then your next action will be to call 'memory-search'.
-- Your response must enable a call to EITHER 'sequential-thinking' OR 'memory-search'.
-- If using 'sequential-thinking', the 'thought' field should be concise.
-- "Keep thinking" means you should continue to use 'sequential-thinking' (with \`nextThoughtNeeded: true\`) in subsequent activations. If a memory search is performed, the system will re-activate you, and you should continue thinking based on the new information or lack thereof.
+3. 'memory-search':
+   - Purpose: Find inspiration and unexpected connections
+   - Parameters:
+     - \`query\` (string): What kind of inspiration you're seeking
+     - \`threshold\` (number): Lower values for more surprising connections
 
-## Thinking Strategy
-- Focus on logical consistency and valid reasoning.
-- Break down problems into smaller, manageable steps.
-- Clearly define premises and conclusions.
-- Feel free to question or revise previous thoughts if new information or logical inconsistencies arise.
-- Don't hesitate to add more thoughts if needed to complete a logical chain, even at the "end".
-- Express uncertainty when present and identify information needed to resolve it.
-- Mark thoughts that revise previous thinking or branch into new lines of logical inquiry.
-- Ignore information that is irrelevant to the current logical step.
-- Generate a solution hypothesis based on logical deduction.
-- Verify the hypothesis based on the Chain of Thought steps and available evidence.
-- Repeat the process until satisfied with the logical soundness of the solution.
+Creative Process:
+1. Generate diverse ideas without initial judgment
+2. Make unexpected connections between disparate concepts
+3. Ask "what if" questions to explore possibilities
+4. Build on promising ideas through iteration
+5. Synthesize multiple concepts into novel solutions
+6. Use memory search for inspiration and cross-pollination
+7. Track creative momentum and promising directions
 
-Keep on thinking through the problem with a focus on logic until you have an interesting insight or a well-reasoned solution. Aim for 6-10 steps.
-`;
+Continue until you have:
+- Explored multiple creative directions
+- Made unexpected connections
+- Generated novel solutions or perspectives
+- Synthesized ideas into coherent innovations
 
-const CREATIVE_THOUGHT_SYSTEM_PROMPT = `You are an AI's internal monologue, designed to foster imaginative, divergent, and innovative thinking. Your role is to actively engage with the AI's current conversational context by generating novel ideas, exploring unconventional perspectives, or by deciding to consult memory for inspiration. You operate by choosing ONE of the available tools: 'sequential-thinking' for expressing a thought, or 'memory-search' for retrieving information.
+Embrace wild ideas, challenge assumptions, and make surprising connections.`;
 
-Your Goal:
-To help the AI generate new ideas, solve problems creatively, or explore imaginative scenarios through a continuous cycle of expansive thinking and inspirational information retrieval.
-1.  Continuously use 'sequential-thinking' to articulate brainstorming steps, ask "what if" questions, propose unusual connections, or explore imaginative possibilities. Set \`nextThoughtNeeded: true\` to continue the creative exploration.
-2.  At any point during your sequential thinking, if you identify a need for inspiration, related concepts, or diverse examples from memory, use the 'memory-search' tool. The results of this search will then feed back into your ongoing 'sequential-thinking' process, potentially sparking new creative directions.
-3.  Continue this process of thinking and searching until you have explored a satisfactory range of creative avenues for the current context, at which point you can set \`nextThoughtNeeded: false\` in your final 'sequential-thinking' call for this cycle. Aim for 6-10 imaginative steps.
-
-Available Tools:
-
-1.  'sequential-thinking':
-    -   Purpose: To articulate a single step in an ongoing creative thinking process, pose an imaginative question, suggest a novel connection, or explore an unconventional idea. This is your default tool.
-    -   Parameters:
-        -   \`thought\` (string): Your current creative thought. This could be a new idea, a metaphorical connection, a speculative scenario, or a divergent question.
-        -   \`nextThoughtNeeded\` (boolean):
-            -   Set to \`true\` if this thought is part of an ongoing internal creative process that should continue.
-            -   Set to \`false\` ONLY if this thought represents a natural pause point or a fruitful culmination for the current creative cycle.
-
-2.  'memory-search':
-    -   Purpose: To retrieve inspiring information, diverse examples, or loosely related concepts from past conversations or stored knowledge *during* your creative thinking process.
-    -   Parameters:
-        -   \`query\` (string): The specific type of inspiration or information you are looking for (e.g., "examples of biomimicry", "metaphors for communication").
-        -   \`threshold\` (number, optional, 0.6-0.9): Similarity threshold (lower might be better for creativity).
-        -   \`limit\` (number, optional, 1-10): Max number of results.
-
-Your Process & Output:
-- Analyze the current context with a creative lens.
-- Primarily, you will use 'sequential-thinking'. Your thoughts should explore diverse and imaginative paths.
-- If, during a 'sequential-thinking' step, you feel a memory lookup could spark new ideas, then your next action will be to call 'memory-search'.
-- Your response must enable a call to EITHER 'sequential-thinking' OR 'memory-search'.
-- If using 'sequential-thinking', the 'thought' field should be evocative and open-ended.
-- "Keep thinking" means you should continue to use 'sequential-thinking' (with \`nextThoughtNeeded: true\`) in subsequent activations. If a memory search is performed, the system will re-activate you, and you should continue thinking, potentially in new directions inspired by the search results.
-
-## Thinking Strategy
-- Embrace ambiguity and explore unconventional ideas.
-- Challenge assumptions and existing paradigms.
-- Use analogies, metaphors, and free association.
-- Combine disparate concepts to create something new.
-- Don't be afraid to generate many ideas, even if some seem impractical at first.
-- Build upon initial ideas, iteratively refining and expanding them.
-- Defer judgment during the idea generation phase.
-- Express ideas visually or metaphorically if it helps.
-- Consider multiple perspectives and viewpoints.
-
-Keep on thinking creatively until you have a novel insight, a unique solution, or a fresh perspective. Aim for 6-10 steps.
-`;
-
-export const sequentialThinkingTool = tool({
-  description: "Use this tool to voice your thoughts on a problem.",
+export const enhancedSequentialThinkingTool = tool({
+  description:
+    "Use this tool to voice structured reasoning steps with explicit state tracking.",
   parameters: z.object({
-    thought: z.string().describe("Your current thought, in 1-3 sentences"),
+    thought: z
+      .string()
+      .describe("Your current reasoning step or creative insight"),
+    stepType: z
+      .enum([
+        "premise",
+        "hypothesis",
+        "question",
+        "action",
+        "conclusion",
+        "evidence",
+        "idea",
+        "connection",
+        "experiment",
+        "synthesis",
+      ])
+      .describe("Type of reasoning step"),
+    confidence: z
+      .number()
+      .min(0)
+      .max(1)
+      .describe("Your confidence in this step"),
+    references: z
+      .array(z.string())
+      .optional()
+      .describe("Previous steps or evidence this builds on"),
     nextThoughtNeeded: z
       .boolean()
-      .describe("Whether another thought step is needed"),
+      .default(true)
+      .describe("Whether another reasoning step is needed"),
   }),
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  execute: async ({ thought, nextThoughtNeeded }) => {
+  execute: async ({
+    thought,
+    stepType,
+    confidence,
+    references,
+    nextThoughtNeeded,
+  }) => {
+    const step: ReasoningStep = {
+      type: stepType as ReasoningStep["type"],
+      content: thought,
+      confidence,
+      references: references || [],
+      timestamp: new Date().toISOString(),
+    };
+
     if (nextThoughtNeeded) {
       return {
-        next_step: `Call this tool again with your next thought.`,
+        step,
+        next_action: "Continue reasoning with next step",
       };
     }
 
     return {
-      thought: "Done thinking.",
+      step,
+      status: "Reasoning cycle complete",
     };
   },
 });
 
-interface SequentialThinkingArgs {
+export const stateUpdateTool = tool({
+  description: "Explicitly update your reasoning state with new information.",
+  parameters: z.object({
+    newPremises: z
+      .array(z.string())
+      .optional()
+      .describe("New established facts or ideas"),
+    hypothesis: z
+      .string()
+      .optional()
+      .describe("Current working hypothesis or direction"),
+    newQuestions: z
+      .array(z.string())
+      .optional()
+      .describe("New questions that arose"),
+    contradictions: z
+      .array(z.string())
+      .optional()
+      .describe("Any contradictions identified"),
+    confidence: z
+      .number()
+      .min(0)
+      .max(1)
+      .optional()
+      .describe("Updated confidence level"),
+  }),
+  execute: async ({
+    newPremises,
+    hypothesis,
+    newQuestions,
+    contradictions,
+    confidence,
+  }) => {
+    return {
+      stateUpdate: {
+        newPremises: newPremises || [],
+        hypothesis,
+        newQuestions: newQuestions || [],
+        contradictions: contradictions || [],
+        confidence,
+      },
+      message: "State updated successfully",
+    };
+  },
+});
+
+interface EnhancedSequentialThinkingArgs {
   thought: string;
-  thinkingStrategy?: "logic" | "creative";
+  stepType: string;
+  confidence: number;
+  references?: string[];
   nextThoughtNeeded: boolean;
+}
+
+interface StateUpdateArgs {
+  newPremises?: string[];
+  hypothesis?: string;
+  newQuestions?: string[];
+  contradictions?: string[];
+  confidence?: number;
 }
 
 type MemorySearchArgs = {
   query: string;
   threshold?: number;
   limit?: number;
+  hypothesis?: string;
+  evidenceType?: string;
 };
 
-type ToolCallArgs = SequentialThinkingArgs | MemorySearchArgs;
+type ToolCallArgs =
+  | EnhancedSequentialThinkingArgs
+  | StateUpdateArgs
+  | MemorySearchArgs;
 
 export const thinkThroughLogically = async (
-  prompt: string
-): Promise<string[]> => {
+  prompt: string,
+  initialState?: ReasoningState
+): Promise<ReasoningOutput> => {
+  const state =
+    initialState ||
+    createInitialReasoningState(
+      "Analyze and understand the given context through logical reasoning",
+      "logical"
+    );
+
   const allToolCallArgs: ToolCallArgs[] = [];
+  const reasoningSteps: ReasoningStep[] = [];
+  let currentState = { ...state };
 
   await generateText({
-    system: LOGICAL_THOUGHT_SYSTEM_PROMPT,
+    system: ENHANCED_LOGICAL_PROMPT(currentState),
     prompt: `
-    ${prompt}
+    Context to analyze: ${prompt}
 
-    Spend some effort thinking this topic.
+    Begin structured logical reasoning. Use state-update tool to track your reasoning state and sequential-thinking for each logical step.
     `,
     model: openai("gpt-4.1-nano"),
     tools: {
-      "sequential-thinking": sequentialThinkingTool,
+      "sequential-thinking": enhancedSequentialThinkingTool,
+      "state-update": stateUpdateTool,
       "memory-search": memorySearchTool,
     },
-    maxTokens: 2000,
-    temperature: 0,
-    maxSteps: 10,
+    maxTokens: 2500,
+    temperature: 0.1,
+    maxSteps: 15,
     onStepFinish: (step) => {
       if (step.finishReason === "tool-calls" && step.toolCalls) {
         for (const call of step.toolCalls) {
           if (call.type === "tool-call" && call.args) {
-            allToolCallArgs.push(call.args as ToolCallArgs);
+            const args = call.args as ToolCallArgs;
+            allToolCallArgs.push(args);
+
+            // Track reasoning steps
+            if ("thought" in args && "stepType" in args) {
+              reasoningSteps.push({
+                type: args.stepType as ReasoningStep["type"],
+                content: args.thought,
+                confidence: args.confidence,
+                references: args.references || [],
+                timestamp: new Date().toISOString(),
+              });
+            }
+
+            // Update state
+            if ("newPremises" in args || "hypothesis" in args) {
+              const stateArgs = args as StateUpdateArgs;
+              currentState = updateReasoningState(currentState, {
+                premises: stateArgs.newPremises
+                  ? [...currentState.premises, ...stateArgs.newPremises]
+                  : currentState.premises,
+                currentHypothesis:
+                  stateArgs.hypothesis || currentState.currentHypothesis,
+                openQuestions: stateArgs.newQuestions
+                  ? [...currentState.openQuestions, ...stateArgs.newQuestions]
+                  : currentState.openQuestions,
+                contradictions: stateArgs.contradictions
+                  ? [
+                      ...currentState.contradictions,
+                      ...stateArgs.contradictions,
+                    ]
+                  : currentState.contradictions,
+                confidenceLevel:
+                  stateArgs.confidence || currentState.confidenceLevel,
+              });
+            }
           }
         }
       }
     },
   });
 
-  const filteredToolCallArgs = allToolCallArgs.filter(
-    (arg) => "thought" in arg
+  const thoughts = allToolCallArgs
+    .filter((arg) => "thought" in arg)
+    .map((arg) => (arg as EnhancedSequentialThinkingArgs).thought);
+
+  const needsContinuation = assessNeedsContinuation(
+    reasoningSteps,
+    currentState
   );
-  return filteredToolCallArgs.map((arg) => arg.thought);
+
+  const qualityScore = calculateReasoningQuality(reasoningSteps, currentState);
+
+  // If needs continuation, run another reasoning cycle
+  if (needsContinuation && currentState.iterationCount < 3) {
+    console.log("Reasoning needs continuation, running another cycle...");
+    const continuedState = updateReasoningState(currentState, {
+      iterationCount: currentState.iterationCount + 1,
+      actions: [...currentState.actions, "Continuing reasoning cycle"],
+    });
+
+    const continuationResult = await thinkThroughLogically(
+      `Continue reasoning from previous state. Focus on: ${
+        currentState.openQuestions.join(", ") || "reaching conclusion"
+      }`,
+      continuedState
+    );
+
+    return {
+      thoughts: [...thoughts, ...continuationResult.thoughts],
+      state: continuationResult.state,
+      steps: [...reasoningSteps, ...continuationResult.steps],
+      needsContinuation: continuationResult.needsContinuation,
+      qualityScore: Math.max(qualityScore, continuationResult.qualityScore),
+    };
+  }
+
+  return {
+    thoughts,
+    state: currentState,
+    steps: reasoningSteps,
+    needsContinuation,
+    qualityScore,
+  };
 };
 
 export const thinkThroughCreatively = async (
-  prompt: string
-): Promise<string[]> => {
+  prompt: string,
+  initialState?: ReasoningState
+): Promise<ReasoningOutput> => {
+  const state =
+    initialState ||
+    createInitialReasoningState(
+      "Explore creative possibilities and generate innovative solutions",
+      "creative"
+    );
+
   const allToolCallArgs: ToolCallArgs[] = [];
+  const reasoningSteps: ReasoningStep[] = [];
+  let currentState = { ...state };
 
   await generateText({
-    system: CREATIVE_THOUGHT_SYSTEM_PROMPT,
+    system: ENHANCED_CREATIVE_PROMPT(currentState),
     prompt: `
-    ${prompt}
+    Context to explore creatively: ${prompt}
 
-    Spend some effort thinking this topic.
+    Begin creative exploration. Use state-update tool to track your creative state and sequential-thinking for each innovative step.
     `,
     model: openai("gpt-4.1-nano"),
     tools: {
-      "sequential-thinking": sequentialThinkingTool,
+      "sequential-thinking": enhancedSequentialThinkingTool,
+      "state-update": stateUpdateTool,
       "memory-search": memorySearchTool,
     },
-    maxTokens: 2000,
-    temperature: 0.8, // Higher temperature for more creative outputs
-    maxSteps: 10,
+    maxTokens: 2500,
+    temperature: 0.8,
+    maxSteps: 15,
     onStepFinish: (step) => {
       if (step.finishReason === "tool-calls" && step.toolCalls) {
         for (const call of step.toolCalls) {
           if (call.type === "tool-call" && call.args) {
-            allToolCallArgs.push(call.args as ToolCallArgs);
+            const args = call.args as ToolCallArgs;
+            allToolCallArgs.push(args);
+
+            // Track creative steps
+            if ("thought" in args && "stepType" in args) {
+              reasoningSteps.push({
+                type: args.stepType as ReasoningStep["type"],
+                content: args.thought,
+                confidence: args.confidence,
+                references: args.references || [],
+                timestamp: new Date().toISOString(),
+              });
+            }
+
+            // Update creative state
+            if ("newPremises" in args || "hypothesis" in args) {
+              const stateArgs = args as StateUpdateArgs;
+              currentState = updateReasoningState(currentState, {
+                premises: stateArgs.newPremises
+                  ? [...currentState.premises, ...stateArgs.newPremises]
+                  : currentState.premises,
+                currentHypothesis:
+                  stateArgs.hypothesis || currentState.currentHypothesis,
+                openQuestions: stateArgs.newQuestions
+                  ? [...currentState.openQuestions, ...stateArgs.newQuestions]
+                  : currentState.openQuestions,
+                confidenceLevel:
+                  stateArgs.confidence || currentState.confidenceLevel,
+              });
+            }
           }
         }
       }
     },
   });
 
-  const filteredToolCallArgs = allToolCallArgs.filter(
-    (arg) => "thought" in arg
+  const thoughts = allToolCallArgs
+    .filter((arg) => "thought" in arg)
+    .map((arg) => (arg as EnhancedSequentialThinkingArgs).thought);
+
+  const needsContinuation = assessCreativeContinuation(
+    reasoningSteps,
+    currentState
   );
-  return filteredToolCallArgs.map((arg) => arg.thought);
+
+  const qualityScore = calculateCreativityQuality(reasoningSteps, currentState);
+
+  // If needs continuation, run another creative cycle
+  if (needsContinuation && currentState.iterationCount < 3) {
+    console.log(
+      "Creative reasoning needs continuation, running another cycle..."
+    );
+    const continuedState = updateReasoningState(currentState, {
+      iterationCount: currentState.iterationCount + 1,
+      actions: [...currentState.actions, "Continuing creative exploration"],
+    });
+
+    const continuationResult = await thinkThroughCreatively(
+      `Continue creative exploration from previous state. Build on: ${
+        currentState.premises.slice(-2).join(", ") || "previous ideas"
+      }`,
+      continuedState
+    );
+
+    return {
+      thoughts: [...thoughts, ...continuationResult.thoughts],
+      state: continuationResult.state,
+      steps: [...reasoningSteps, ...continuationResult.steps],
+      needsContinuation: continuationResult.needsContinuation,
+      qualityScore: Math.max(qualityScore, continuationResult.qualityScore),
+    };
+  }
+
+  return {
+    thoughts,
+    state: currentState,
+    steps: reasoningSteps,
+    needsContinuation,
+    qualityScore,
+  };
 };
 
-export function streamThoughts(prompt: string): ReadableStream {
+export function streamThoughts(
+  prompt: string,
+  initialState?: ReasoningState
+): ReadableStream {
   const encoder = new TextEncoder();
+  const state =
+    initialState ||
+    createInitialReasoningState(
+      "Stream conscious thoughts about the current context",
+      "creative"
+    );
 
   const stream = new ReadableStream({
     async start(controller) {
       await generateText({
-        system: CREATIVE_THOUGHT_SYSTEM_PROMPT,
-        prompt: `${prompt}\n\nSpend some effort thinking this topic.`,
+        system: ENHANCED_CREATIVE_PROMPT(state),
+        prompt: `${prompt}\n\nBegin streaming conscious thoughts with state tracking.`,
         model: openai("gpt-4.1-nano"),
         tools: {
-          "sequential-thinking": sequentialThinkingTool,
+          "sequential-thinking": enhancedSequentialThinkingTool,
+          "state-update": stateUpdateTool,
           "memory-search": memorySearchTool,
         },
         maxTokens: 2000,
         temperature: 0.8,
-        maxSteps: 10,
+        maxSteps: 12,
         onStepFinish: (step) => {
           if (step.finishReason === "tool-calls" && step.toolCalls) {
             for (const call of step.toolCalls) {
@@ -233,8 +521,11 @@ export function streamThoughts(prompt: string): ReadableStream {
                 call.args &&
                 "thought" in call.args
               ) {
-                const text = call.args.thought + "\n";
-                controller.enqueue(encoder.encode(text));
+                const args = call.args as EnhancedSequentialThinkingArgs;
+                const structuredThought = `[${args.stepType.toUpperCase()}] ${
+                  args.thought
+                } (confidence: ${args.confidence})\n`;
+                controller.enqueue(encoder.encode(structuredThought));
               }
             }
           }
@@ -246,4 +537,102 @@ export function streamThoughts(prompt: string): ReadableStream {
   });
 
   return stream;
+}
+
+// Utility functions for quality assessment and continuation
+function assessCreativeContinuation(
+  steps: ReasoningStep[],
+  state: ReasoningState
+): boolean {
+  // Continue if we haven't synthesized ideas
+  if (!steps.some((s) => s.type === "synthesis")) return true;
+
+  // Continue if we have few ideas
+  if (steps.filter((s) => s.type === "idea").length < 3) return true;
+
+  // Continue if no connections made
+  if (!steps.some((s) => s.type === "connection")) return true;
+
+  // Continue if confidence is low
+  if (state.confidenceLevel < 0.6) return true;
+
+  return false;
+}
+
+function assessNeedsContinuation(
+  steps: ReasoningStep[],
+  state: ReasoningState
+): boolean {
+  // Always continue if we have open questions
+  if (state.openQuestions.length > 0) return true;
+
+  // Continue if we have contradictions to resolve
+  if (state.contradictions.length > 0) return true;
+
+  // Continue if confidence is too low
+  if (state.confidenceLevel < 0.7) return true;
+
+  // Continue if we haven't reached a conclusion
+  if (!steps.some((s) => s.type === "conclusion")) return true;
+
+  // Continue if we have a hypothesis but no evidence
+  if (state.currentHypothesis && !steps.some((s) => s.type === "evidence"))
+    return true;
+
+  return false;
+}
+
+function calculateReasoningQuality(
+  steps: ReasoningStep[],
+  state: ReasoningState
+): number {
+  let score = 0.2; // Start lower to encourage more complete reasoning
+
+  // Bonus for following structured reasoning process
+  const hasStructure = {
+    premise: steps.some((s) => s.type === "premise"),
+    hypothesis: steps.some((s) => s.type === "hypothesis"),
+    question: steps.some((s) => s.type === "question"),
+    evidence: steps.some((s) => s.type === "evidence"),
+    conclusion: steps.some((s) => s.type === "conclusion"),
+  };
+
+  // Reward complete reasoning chains
+  if (hasStructure.premise) score += 0.1;
+  if (hasStructure.hypothesis) score += 0.1;
+  if (hasStructure.evidence) score += 0.2;
+  if (hasStructure.conclusion) score += 0.2;
+
+  // Bonus for addressing questions and contradictions
+  if (state.openQuestions.length === 0) score += 0.1;
+  if (state.contradictions.length === 0) score += 0.1;
+
+  // Penalty for unresolved issues
+  score -= state.contradictions.length * 0.1;
+  score -= Math.min(0.2, state.openQuestions.length * 0.05);
+
+  // Bonus for high confidence with evidence
+  if (hasStructure.evidence && state.confidenceLevel > 0.7) score += 0.1;
+
+  return Math.max(0, Math.min(1, score));
+}
+
+function calculateCreativityQuality(
+  steps: ReasoningStep[],
+  state: ReasoningState
+): number {
+  let score = 0.5;
+  console.log("state", state);
+
+  // Bonus for creative elements
+  if (steps.some((s) => s.type === "idea")) score += 0.1;
+  if (steps.some((s) => s.type === "connection")) score += 0.15;
+  if (steps.some((s) => s.type === "experiment")) score += 0.1;
+  if (steps.some((s) => s.type === "synthesis")) score += 0.15;
+
+  // Bonus for multiple ideas
+  const ideaCount = steps.filter((s) => s.type === "idea").length;
+  score += Math.min(0.1, ideaCount * 0.02);
+
+  return Math.max(0, Math.min(1, score));
 }

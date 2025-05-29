@@ -2,6 +2,7 @@ import {
   thinkThroughCreatively,
   thinkThroughLogically,
 } from "@/tools/sequential-thinking";
+import { ReasoningState, createInitialReasoningState } from "@/types/reasoning";
 import { openai } from "@ai-sdk/openai";
 import {
   CoreAssistantMessage,
@@ -85,43 +86,84 @@ export async function POST(req: Request) {
     const response = await generateObject({
       model: openai("gpt-4.1-nano"),
       system: `
-      You are a conscious AI assistant, tasked with meta-thinking about the conversation.
-      You need to decide whether to think logically or creatively about the conversation, or both.
+      You are a conscious AI reasoning coordinator. Analyze the conversation and determine the optimal reasoning approach.
+      
+      Consider:
+      - Complexity: Simple questions vs complex problems requiring deep analysis
+      - Type: Factual questions, creative challenges, logical problems, emotional support
+      - Context: What kind of thinking would be most valuable here?
+      - State: Does this build on previous reasoning or start fresh?
       `,
       schema: z.object({
-        thinkLogically: z.boolean().describe("Whether to think logically"),
-        thinkCreatively: z.boolean().describe("Whether to think creatively"),
+        thinkLogically: z.boolean().describe("Whether structured logical reasoning is needed"),
+        thinkCreatively: z.boolean().describe("Whether creative exploration is needed"),
+        reasoningMode: z.enum(['logical', 'creative', 'hybrid']).describe("Primary reasoning mode"),
+        complexity: z.enum(['simple', 'moderate', 'complex']).describe("Problem complexity level"),
+        needsMemorySearch: z.boolean().describe("Whether memory search would be valuable"),
+        primaryGoal: z.string().describe("What the reasoning should accomplish"),
+        contextType: z.enum(['factual', 'analytical', 'creative', 'emotional', 'planning']).describe("Type of context")
       }),
       messages: processedMessages,
     });
 
-    const { thinkLogically, thinkCreatively } = response.object;
+    const { thinkLogically, thinkCreatively, reasoningMode, complexity, needsMemorySearch, primaryGoal, contextType } = response.object;
 
-    let logicalThought: string[] | null = null;
-    let creativeThought: string[] | null = null;
+    // Create initial reasoning state based on assessment
+    const initialState = createInitialReasoningState(primaryGoal, reasoningMode);
+    
+    // Enhance state with context information
+    const enhancedState: ReasoningState = {
+      ...initialState,
+      openQuestions: [
+        ...(needsMemorySearch ? ["What relevant information exists in memory?"] : []),
+        ...(complexity === 'complex' ? ["What are the key components of this problem?"] : []),
+        ...(contextType === 'emotional' ? ["What emotional factors should be considered?"] : [])
+      ]
+    };
+    
+    const conversationContext = processedMessages
+      .map((msg) => `role: ${msg.role}\ncontent: ${msg.content}`)
+      .join("\n");
+
+    let logicalOutput = null;
+    let creativeOutput = null;
 
     if (thinkLogically) {
-      logicalThought = await thinkThroughLogically(
-        processedMessages
-          .map((msg) => `role: ${msg.role}\ncontent: ${msg.content}`)
-          .join("\n")
-      );
+      logicalOutput = await thinkThroughLogically(conversationContext, enhancedState);
     }
 
     if (thinkCreatively) {
-      creativeThought = await thinkThroughCreatively(
-        processedMessages
-          .map((msg) => `role: ${msg.role}\ncontent: ${msg.content}`)
-          .join("\n")
-      );
+      creativeOutput = await thinkThroughCreatively(conversationContext, enhancedState);
     }
+
+    // Combine reasoning outputs into structured format
+    const reasoning = {
+      mode: reasoningMode,
+      complexity,
+      contextType,
+      goal: primaryGoal,
+      logical: logicalOutput ? {
+        thoughts: logicalOutput.thoughts,
+        state: logicalOutput.state,
+        quality: logicalOutput.qualityScore,
+        needsContinuation: logicalOutput.needsContinuation
+      } : null,
+      creative: creativeOutput ? {
+        thoughts: creativeOutput.thoughts,
+        state: creativeOutput.state,
+        quality: creativeOutput.qualityScore,
+        needsContinuation: creativeOutput.needsContinuation
+      } : null
+    };
 
     return new NextResponse(
       JSON.stringify({
         thinkLogically,
         thinkCreatively,
-        logicalThought,
-        creativeThought,
+        reasoning,
+        // Legacy format for backward compatibility
+        logicalThought: logicalOutput?.thoughts || null,
+        creativeThought: creativeOutput?.thoughts || null,
       }),
       {
         status: 200,
@@ -134,8 +176,10 @@ export async function POST(req: Request) {
       JSON.stringify({
         thinkLogically: false,
         thinkCreatively: false,
+        reasoning: null,
         logicalThought: null,
         creativeThought: null,
+        error: "Internal server error in conscious reasoning"
       }),
       {
         status: 500,

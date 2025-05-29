@@ -35,7 +35,15 @@ export default function PlannerPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  // Start streaming messages when component mounts
+  // State for tracking streaming content
+  const [streamingContent, setStreamingContent] = useState("");
+  const [currentToolCalls, setCurrentToolCalls] = useState<Map<string, {
+    toolName: string;
+    args: string;
+    result?: string;
+  }>>(new Map());
+
+  // Start streaming when component mounts
   useEffect(() => {
     let eventSource: EventSource;
 
@@ -51,58 +59,112 @@ export default function PlannerPage() {
         `/api/agents/stream?agentId=${selectedAgentId}`
       );
 
-      // Listen for the 'connected' event
-      eventSource.addEventListener("connected", () => {
+      // Listen for 'message' events (Server-Sent Events use 'data:' format)
+      eventSource.addEventListener("message", (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          
+          switch (data.type) {
+            case "text-delta":
+              setStreamingContent(prev => prev + data.textDelta);
+              setIsLoading(false);
+              break;
+
+            case "tool-call-streaming-start":
+              setCurrentToolCalls(prev => {
+                const updated = new Map(prev);
+                updated.set(data.toolCallId, {
+                  toolName: data.toolName,
+                  args: "",
+                });
+                return updated;
+              });
+              break;
+
+            case "tool-call-delta":
+              setCurrentToolCalls(prev => {
+                const updated = new Map(prev);
+                const existing = updated.get(data.toolCallId);
+                if (existing) {
+                  existing.args += data.argsTextDelta;
+                }
+                return updated;
+              });
+              break;
+
+            case "tool-result":
+              setCurrentToolCalls(prev => {
+                const updated = new Map(prev);
+                const existing = updated.get(data.toolCallId);
+                if (existing) {
+                  existing.result = data.result;
+                }
+                return updated;
+              });
+              break;
+
+            case "finish":
+              // Finalize the assistant message
+              if (streamingContent || currentToolCalls.size > 0) {
+                const contentItems = [];
+                
+                // Add text content if any
+                if (streamingContent) {
+                  contentItems.push({
+                    type: "text" as const,
+                    text: streamingContent,
+                  });
+                }
+                
+                // Add tool calls and results
+                for (const [toolCallId, toolCall] of currentToolCalls) {
+                  contentItems.push({
+                    type: "tool-call" as const,
+                    toolCallId,
+                    toolName: toolCall.toolName,
+                    args: toolCall.args ? JSON.parse(toolCall.args) : {},
+                  });
+                  
+                  if (toolCall.result) {
+                    contentItems.push({
+                      type: "tool-result" as const,
+                      toolCallId,
+                      toolName: toolCall.toolName,
+                      result: {
+                        success: true,
+                        data: toolCall.result,
+                        type: "markdown" as const,
+                      },
+                    });
+                  }
+                }
+
+                const assistantMessage: Message = {
+                  id: Date.now().toString(),
+                  role: "assistant",
+                  content: contentItems,
+                };
+
+                setMessages(prev => [...prev, assistantMessage]);
+              }
+              
+              // Reset streaming state
+              setStreamingContent("");
+              setCurrentToolCalls(new Map());
+              setIsLoading(false);
+              setIsConnected(true);
+              break;
+          }
+        } catch (err) {
+          console.error("Error parsing streaming data:", err);
+        }
+      });
+
+      // Handle connection establishment
+      eventSource.addEventListener("open", () => {
         console.log("Connected to event stream");
         setIsConnected(true);
         setIsLoading(false);
-      });
-
-      // Listen for the 'messages' event
-      eventSource.addEventListener("messages", (event) => {
-        try {
-          // Normalize the event data (removing "data:" prefix if present)
-          const normalizedData = normalizeEventData(event.data);
-
-          // Parse the messages array
-          const parsedMessages = JSON.parse(normalizedData) as Message[];
-
-          // Process each message to handle JSON tool responses
-          const processedMessages = parsedMessages.map((message) => {
-            if (
-              message.role === "user" &&
-              typeof message.content === "string"
-            ) {
-              const trimmedContent = message.content.trim();
-
-              // Check if the content is a JSON array of tool responses
-              if (parseJsonArray(trimmedContent).length > 0) {
-                // console.log("Found JSON array tool responses");
-                // We don't modify the original message but the MessageBubble component
-                // will use isDisplayedAsAssistant to determine how to display it
-              }
-              // Check for embedded JSON objects
-              else if (containsMultipleJsonObjects(trimmedContent)) {
-                // Check if we have valid tool responses in the content
-                const jsonResponses = extractJsonObjects(trimmedContent);
-                if (jsonResponses.length > 0) {
-                  console.log(
-                    "Found JSON tool responses in user message:",
-                    jsonResponses.length
-                  );
-                  // We don't modify the original message but the MessageBubble component
-                  // will use isDisplayedAsAssistant to determine how to display it
-                }
-              }
-            }
-            return message;
-          });
-
-          setMessages(processedMessages);
-          setIsLoading(false);
-        } catch (err) {
-          console.error("Error parsing messages:", err);
-        }
       });
 
       // Handle all errors
@@ -127,10 +189,10 @@ export default function PlannerPage() {
     };
   }, [selectedAgentId]);
 
-  // Scroll to bottom when messages change
+  // Scroll to bottom when messages or streaming content changes
   useEffect(() => {
     scrollToBottom();
-  }, [messages]);
+  }, [messages, streamingContent, currentToolCalls]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setInput(e.target.value);
@@ -255,7 +317,52 @@ export default function PlannerPage() {
             />
           ))}
 
-          {isLoading && (
+          {/* Show streaming content and tool calls in progress */}
+          {(streamingContent || currentToolCalls.size > 0) && (
+            <div className="flex items-start gap-3">
+              <Avatar className="bg-blue-500 text-white">
+                <AvatarFallback>AI</AvatarFallback>
+                <AvatarImage src="/ai-avatar.svg" alt="AI" />
+              </Avatar>
+              <div className="bg-white border border-gray-200 shadow-sm p-4 rounded-lg max-w-[80%]">
+                {/* Streaming text content */}
+                {streamingContent && (
+                  <div className="mb-3">
+                    <div className="prose prose-sm max-w-none">
+                      {streamingContent}
+                      <span className="inline-block w-2 h-4 bg-blue-500 animate-pulse ml-1"></span>
+                    </div>
+                  </div>
+                )}
+                
+                {/* Tool calls in progress */}
+                {Array.from(currentToolCalls.entries()).map(([toolCallId, toolCall]) => (
+                  <div key={toolCallId} className="mb-3">
+                    <div className="border border-gray-200 rounded-md overflow-hidden">
+                      <div className="bg-blue-50 px-3 py-2 border-l-2 border-l-blue-500 font-medium text-sm text-blue-700">
+                        Tool Call: {toolCall.toolName}
+                        {!toolCall.result && <span className="ml-2 animate-pulse">●</span>}
+                      </div>
+                      {toolCall.args && (
+                        <pre className="text-xs bg-white text-gray-800 p-3 m-0 overflow-x-auto border-t border-gray-200">
+                          {toolCall.args}
+                          {!toolCall.result && <span className="inline-block w-1 h-3 bg-blue-500 animate-pulse ml-1"></span>}
+                        </pre>
+                      )}
+                      {toolCall.result && (
+                        <div className="p-3 text-sm border-t border-gray-200 bg-green-50">
+                          <div className="text-green-700 font-medium mb-1">Result:</div>
+                          <div className="text-gray-800">{toolCall.result}</div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {isLoading && !streamingContent && currentToolCalls.size === 0 && (
             <div className="flex items-start gap-3">
               <Avatar className="bg-blue-500 text-white">
                 <AvatarFallback>AI</AvatarFallback>

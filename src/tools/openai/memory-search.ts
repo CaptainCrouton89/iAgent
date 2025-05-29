@@ -52,13 +52,24 @@ export const memorySearchToolDefinition: ChatCompletionTool = {
           description:
             "End date for search range (ISO format or relative like 'today')",
         },
+        hypothesis: {
+          type: "string",
+          description:
+            "Current hypothesis being tested - helps focus search for supporting or contradicting evidence",
+        },
+        evidenceType: {
+          type: "string",
+          enum: ["supporting", "contradicting", "neutral"],
+          description:
+            "Type of evidence being sought relative to current hypothesis",
+        },
       },
       required: ["limit", "searchMode"],
     },
   },
 };
 
-export async function executeMemorySearch(params: MemorySearchParameters): Promise<string> {
+export async function executeMemorySearch(params: MemorySearchParameters & { hypothesis?: string; evidenceType?: string }): Promise<string> {
   try {
     const {
       query,
@@ -68,6 +79,8 @@ export async function executeMemorySearch(params: MemorySearchParameters): Promi
       startDate,
       endDate,
       searchMode = "deep",
+      hypothesis,
+      evidenceType,
     } = params;
 
     // Parse relative dates if provided
@@ -82,8 +95,13 @@ export async function executeMemorySearch(params: MemorySearchParameters): Promi
       parsedEndDate = parseRelativeDate(endDate);
     }
 
-    // If no query is provided but dates are, we'll search for all memories in that time range
-    const searchQuery = query || "";
+    // Enhance search query with reasoning context
+    let searchQuery = query || "";
+    if (hypothesis && !query) {
+      searchQuery = hypothesis;
+    } else if (hypothesis && query) {
+      searchQuery = `${query} ${hypothesis}`;
+    }
 
     const result = await searchMemories(
       searchQuery,
@@ -140,13 +158,18 @@ export async function executeMemorySearch(params: MemorySearchParameters): Promi
           }
         }
 
+        let relevanceNote = `Relevance: ${Math.round(memory.similarity * 100)}%`;
+        
+        // Add reasoning context if available
+        if (hypothesis && evidenceType) {
+          relevanceNote += ` | Evidence type: ${evidenceType} for "${hypothesis.slice(0, 50)}${hypothesis.length > 50 ? '...' : ''}"`;
+        }
+        
         return `Memory ${absoluteIndex} [ID: ${
           memory.id
         }] (${formatRelativeTime(
           memory.created_at
-        )}) - Relevance: ${Math.round(
-          memory.similarity * 100
-        )}%:\n${messageContent}\n`;
+        )}) - ${relevanceNote}:\n${messageContent}\n`;
       })
       .join("\n---\n");
 
