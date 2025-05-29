@@ -3,6 +3,8 @@ export interface MemorySearchParameters {
   threshold?: number;
   limit?: number;
   searchMode?: "deep" | "shallow";
+  memoryType?: "episodic" | "semantic" | "hybrid";
+  semanticType?: "fact" | "theme" | "summary";
   page?: number;
   startDate?: string;
   endDate?: string;

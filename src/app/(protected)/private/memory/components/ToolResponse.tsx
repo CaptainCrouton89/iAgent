@@ -12,6 +12,7 @@ interface SearchMemoriesArgs {
   endDate?: string;
   page?: number;
   searchMode?: "deep" | "shallow";
+  memoryType?: "semantic" | "episodic" | "hybrid";
 }
 
 interface InspectMemoryArgs {
@@ -137,6 +138,11 @@ function renderSearchMemoriesTool(toolInvocation: ToolInvocation) {
           {args.searchMode && (
             <p className="text-xs text-muted-foreground mt-1">
               Search Mode: {args.searchMode}
+            </p>
+          )}
+          {args.memoryType && (
+            <p className="text-xs text-muted-foreground mt-1">
+              Memory Type: {args.memoryType}
             </p>
           )}
           <p className="text-sm font-medium mt-2">Memory Search Results:</p>

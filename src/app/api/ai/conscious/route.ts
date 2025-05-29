@@ -101,12 +101,20 @@ export async function POST(req: Request) {
         complexity: z.enum(['simple', 'moderate', 'complex']).describe("Problem complexity level"),
         needsMemorySearch: z.boolean().describe("Whether memory search would be valuable"),
         primaryGoal: z.string().describe("What the reasoning should accomplish"),
-        contextType: z.enum(['factual', 'analytical', 'creative', 'emotional', 'planning']).describe("Type of context")
+        contextType: z.enum(['factual', 'analytical', 'creative', 'emotional', 'planning']).optional().default('analytical').describe("Type of context")
       }),
       messages: processedMessages,
     });
 
-    const { thinkLogically, thinkCreatively, reasoningMode, complexity, needsMemorySearch, primaryGoal, contextType } = response.object;
+    const { 
+      thinkLogically, 
+      thinkCreatively, 
+      reasoningMode, 
+      complexity, 
+      needsMemorySearch, 
+      primaryGoal, 
+      contextType = 'analytical' // Default to 'analytical' if not provided
+    } = response.object;
 
     // Create initial reasoning state based on assessment
     const initialState = createInitialReasoningState(primaryGoal, reasoningMode);

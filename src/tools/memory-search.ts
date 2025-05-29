@@ -1,3 +1,4 @@
+import { searchSemanticMemories } from "@/actions/semantic-memory";
 import { formatRelativeTime } from "@/utils/dateFormat";
 import { searchMemories } from "@/utils/supabase/memory-search";
 import { tool } from "ai";
@@ -8,13 +9,18 @@ import { z } from "zod";
  */
 export const memorySearchTool = tool({
   description:
-    "Search for previous conversations or memories using semantic similarity and optional date filtering. Supports pagination to browse through multiple results. Use 'deep' mode for full compressed conversations or 'shallow' mode for just titles and summaries.",
+    "Search for memories using different modes: 'episodic' for specific conversations/events, 'semantic' for facts/themes/summaries, or 'hybrid' for both. Supports semantic similarity search, date filtering, and pagination.",
   parameters: z.object({
     query: z
       .string()
       .optional()
       .describe(
         "The search query to find relevant memories (optional - leave empty to search all memories in date range)"
+      ),
+    memoryType: z
+      .enum(["episodic", "semantic", "hybrid"])
+      .describe(
+        "Memory type: 'episodic' for conversations/events, 'semantic' for facts/themes, 'hybrid' for both"
       ),
     threshold: z
       .number()
@@ -29,8 +35,15 @@ export const memorySearchTool = tool({
       .describe("Maximum number of results per page"),
     searchMode: z
       .enum(["deep", "shallow"])
+      .default("deep")
       .describe(
-        "Search mode: 'deep' returns full compressed conversations, 'shallow' returns only titles and summaries"
+        "Search mode: 'deep' returns full content, 'shallow' returns only titles/summaries (episodic only)"
+      ),
+    semanticType: z
+      .enum(["fact", "theme", "summary"])
+      .optional()
+      .describe(
+        "Filter semantic memories by type (only applies when memoryType includes semantic)"
       ),
     page: z
       .number()
@@ -52,12 +65,14 @@ export const memorySearchTool = tool({
   }),
   execute: async ({
     query,
-    threshold = 0.6,
+    memoryType = "hybrid",
+    threshold = 0.7,
     limit = 10,
     page = 1,
     startDate,
     endDate,
     searchMode = "deep",
+    semanticType,
   }) => {
     try {
       // Parse relative dates if provided
@@ -75,6 +90,41 @@ export const memorySearchTool = tool({
       // If no query is provided but dates are, we'll search for all memories in that time range
       const searchQuery = query || "";
 
+      // Handle different memory types
+      if (memoryType === "semantic") {
+        // Search only semantic memories
+        if (!searchQuery) {
+          return "Query is required for semantic memory search.";
+        }
+
+        const semanticResults = await searchSemanticMemories(searchQuery, {
+          type: semanticType,
+          threshold,
+          limit,
+        });
+
+        if (semanticResults.length === 0) {
+          return "No relevant semantic memories found.";
+        }
+
+        const semanticOutput = semanticResults
+          .map((memory: { id: string; type: string; content: string; similarity: number; confidence: number }, index: number) => {
+            const typeLabel =
+              memory.type.charAt(0).toUpperCase() + memory.type.slice(1);
+            return `${typeLabel} ${index + 1} [ID: ${
+              memory.id
+            }] (Relevance: ${Math.round(
+              memory.similarity * 100
+            )}%, Confidence: ${Math.round(memory.confidence * 100)}%):\n${
+              memory.content
+            }\n`;
+          })
+          .join("\n---\n");
+
+        return semanticOutput;
+      }
+
+      // Search episodic memories (for episodic or hybrid mode)
       const result = await searchMemories(
         searchQuery,
         threshold,
@@ -139,6 +189,45 @@ export const memorySearchTool = tool({
           )}%:\n${messageContent}\n`;
         })
         .join("\n---\n");
+
+      // For hybrid mode, also search semantic memories
+      if (memoryType === "hybrid" && searchQuery) {
+        try {
+          const semanticResults = await searchSemanticMemories(searchQuery, {
+            type: semanticType,
+            threshold,
+            limit: Math.min(5, limit), // Limit semantic results in hybrid mode
+          });
+
+          if (semanticResults.length > 0) {
+            const semanticSection =
+              "\n\n=== SEMANTIC MEMORIES ===\n" +
+              semanticResults
+                .map((memory: { id: string; type: string; content: string; similarity: number; confidence: number }, index: number) => {
+                  const typeLabel =
+                    memory.type.charAt(0).toUpperCase() + memory.type.slice(1);
+                  return `${typeLabel} ${index + 1} [ID: ${
+                    memory.id
+                  }] (Relevance: ${Math.round(
+                    memory.similarity * 100
+                  )}%, Confidence: ${Math.round(memory.confidence * 100)}%):\n${
+                    memory.content
+                  }`;
+                })
+                .join("\n---\n");
+
+            return (
+              "=== EPISODIC MEMORIES ===\n" +
+              memoriesOutput +
+              "\n---" +
+              paginationInfo +
+              semanticSection
+            );
+          }
+        } catch (error) {
+          console.error("Error searching semantic memories:", error);
+        }
+      }
 
       return memoriesOutput + "\n---" + paginationInfo;
     } catch (error) {

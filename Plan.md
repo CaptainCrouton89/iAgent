@@ -1,161 +1,59 @@
-# Memory Metadata Enhancement Plan
+Phase 1: Semantic Memory Foundations
 
-## Overview
+Goal: Introduce semantic memory derived from episodic data, with structured, deduplicated storage. 1. Define Semantic Memory Schema
+• Fields:
+• id
+• type: "fact" | "theme" | "summary"
+• content: Natural language summary or fact
+• embedding: Vector representation
+• confidence: Initial + dynamic scoring
+• strength: memory decay float, similar to strength for episodic memories
+• provenance: Episode IDs + timestamps
+• related_memories: Array of semantic memory uuids related to this one.
+• last_updated 2. Set Up Semantic Memory Store
+• Separate collection/table.
+• Indexed by embedding, type, and content.
+• Deduplication enforced at insertion time.
 
-Enhance the memory system with intelligent metadata, decay mechanics, and improved search ranking for more sophisticated conversation memory retention.
+⸻
 
-## 1. Database Updates
+Phase 2: Dream Phase — Theme Extraction and Semantic Reconciliation
 
-✅ **Already Complete** - The `memories` table has been updated with:
-- `label` VARCHAR(50)
-- `strength` FLOAT
-- `last_used` TIMESTAMPTZ
-- `pinned` BOOLEAN
+Goal: Periodically extract meaningful themes from episodic memory and reconcile with existing semantic memory to avoid bloat. 1. Triggering
+• Scheduled (e.g., daily cron job or after N new episodes). 2. Extraction Process
+• Step 1: Pull recent episodic embeddings (e.g., last 100 episodes).
+• Step 2: Cluster using a scalable algorithm (e.g., k-means, HDBSCAN).
+• Step 3: For each cluster:
+• Summarize using LLM to extract representative facts.
+• Generate candidate semantic memories (proposed_facts). 3. Reconciliation Pipeline
+• For each proposed_fact: 1. Similarity Check: Compute cosine similarity with existing semantic memory embeddings. 2. Threshold Logic:
+• If high similarity (≥ threshold): update confidence, append new provenance, update last_updated.
+• If medium similarity: optionally merge or rewrite.
+• If low similarity: add as new semantic memory only if novel enough (e.g., above novelty score threshold).
+• Update knowledge graph 3. Confidence Adjustment:
+• Reinforce matching entries.
+• Decay unmatched entries over time (if stale, remove).
+• We already have a decay method for episodic memories, use this to also decay these memories instead 4. Retention Control
+• Semantic memory capped in size or pruned by:
+• Confidence score decay.
+• Relevance ranking.
+• Access frequency.
 
-## 2. Memory Save Enhancement (`src/actions/memory-chat.ts`)
+⸻
 
-### Update `generateTitleAndSummary` to `generateMemoryMetadata`:
+Phase 3: Semantic Memory Query Interface
 
-- Generate title and summary (existing)
-- Generate label based on conversation content
-- Calculate initial strength based on conversation importance
-- Set `last_used` to creation time (not on every retrieval)
-- Determine if content should be pinned
-- Return array of memory IDs that were used in the conversation
+Goal: Provide functional access to stored semantic memories. 1. Implement search_semantic_memory(query)
+• Embedding-based similarity search.
+• Filter by type, confidence, or time bounds. 2. Add Provenance Linking
+• Results include links to source episodes. 3. Update the search-tool so that it takes in "search-mode" of "semantic", "episodic", or "hybrid".
+• Factual/summary/generalization → semantic
+• Time/event-specific → episodic
+• Hybrid/fallback → query both
 
-### Label Categories (for user conversations):
+⸻
 
-- `important`: Core user info, critical decisions, key facts
-- `user_profile`: Personal info, preferences, habits, names
-- `project_x`: Project-specific memories (dynamic labels)
-- `temporary`: Time-sensitive info, transient context
-- `trivial`: Small talk, low-value exchanges
-- `general`: Default category
-
-### Strength Calculation:
-
-- Base strength: 0.5-0.9 depending on content quality
-- Boost for: Questions answered, problems solved, new information learned
-- Reduce for: Repetitive content, small talk, no clear outcome
-
-### Auto-pin Logic:
-
-- User's name when first mentioned
-- Key personal identifiers
-- Explicitly marked important information
-- Core preferences that affect all interactions
-
-## 3. Memory Usage Tracking
-
-### When saving a conversation:
-1. Analyze which memories from search were actually relevant
-2. Update `last_used` timestamp for those memories only
-3. Boost strength by +0.1 (larger boost) for used memories
-4. Track memory IDs in conversation metadata
-
-### When using `inspectMemory` tool:
-- Update `last_used` for that specific memory
-- Boost strength by +0.1
-
-## 4. Memory Search Enhancement (`src/tools/memory-search.ts`)
-
-### Enhanced Ranking Algorithm:
-
-1. Fetch 3x requested limit from database (to allow better ranking)
-2. Get all metadata fields including new ones
-3. Calculate composite score for each memory:
-   ```
-   score = (similarity * 0.4) +
-           (strength * 0.3) +
-           (recency_score * 0.2) +
-           (label_importance * 0.1)
-   ```
-4. Apply modifiers:
-   - Pinned memories: +1.0 to score
-   - Label importance multipliers:
-     - `important`: 1.5x
-     - `user_profile`: 1.3x
-     - `project_*`: 1.2x
-     - `general`: 1.0x
-     - `temporary`: 0.8x
-     - `trivial`: 0.5x
-5. Sort by composite score
-6. Return top N results as requested
-
-### Recency Score:
-
-- Calculate based on `last_used` timestamp
-- Exponential decay: `recency_score = exp(-days_since_used / 30)`
-
-## 5. Memory Decay Cron Job
-
-### Endpoint: `/api/cron/ai/memory/decay`
-
-- Run daily at 2 AM UTC
-- Process all non-pinned memories
-
-### Decay Formula:
-
-```typescript
-// Base decay rate per day (adjusted for typical starting strength 0.5-0.7)
-const baseDecayRate = {
-  important: 0.001,      // -0.1% per day (never deleted)
-  user_profile: 0.001,   // -0.1% per day (~1-2 years to deletion)
-  general: 0.003,        // -0.3% per day (~4-6 months to deletion)
-  temporary: 0.01,       // -1% per day (~6-8 weeks to deletion)
-  trivial: 0.02,         // -2% per day (~3-4 weeks to deletion)
-};
-
-// Apply decay based on days since last_used
-newStrength = currentStrength - (baseDecayRate[label] * daysSinceLastUsed);
-
-// Deletion criteria
-if (label !== "important" && strength < 0.1) {
-  deleteMemory();
-}
-```
-
-### Additional Rules:
-
-- Never decay pinned memories
-- Minimum strength: 0.0
-- Log decay operations for monitoring
-
-## 6. Implementation Order
-
-1. **Update Save Function** ✅
-   - Enhance metadata generation
-   - Track used memories from search
-
-2. **Update Search Function**
-   - Implement enhanced ranking with metadata
-   - Test ranking algorithm
-
-3. **Create Decay Cron Job**
-   - Implement decay logic
-   - Add to Vercel cron configuration
-
-4. **Add Usage Tracking**
-   - Update memory strength/last_used on actual usage
-   - Track in conversation save and inspect tool
-
-## 7. Database Function Updates Needed
-
-Update `search_memories_by_date` to return all metadata:
-- Add `title`, `summary`, `label`, `strength`, `last_used`, `pinned` to return type
-
-## 8. Testing Strategy
-
-- Test label generation accuracy
-- Verify ranking improvements
-- Monitor decay rates
-- Ensure pinned memories persist
-- Performance testing with large datasets
-
-## 8. Future Enhancements
-
-- User-adjustable decay rates
-- Manual label/pin editing
-- Memory clustering by project
-- Export/import memory sets
-- Analytics dashboard for memory health
+Notes
+• No new semantic memory is accepted without reconciliation.
+• Memory bloat is controlled via similarity thresholding, deduplication, and decay.
+• Dream phase acts as a high-precision summarizer, not a passive aggregator.

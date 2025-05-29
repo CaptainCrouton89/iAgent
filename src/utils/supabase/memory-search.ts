@@ -19,11 +19,12 @@ const LABEL_MULTIPLIERS: Record<string, number> = {
 // Calculate recency score based on exponential decay
 function calculateRecencyScore(lastUsed: string | undefined): number {
   if (!lastUsed) return 0.5; // Default score if no last_used date
-  
+
   const now = new Date();
   const lastUsedDate = new Date(lastUsed);
-  const daysSinceUsed = (now.getTime() - lastUsedDate.getTime()) / (1000 * 60 * 60 * 24);
-  
+  const daysSinceUsed =
+    (now.getTime() - lastUsedDate.getTime()) / (1000 * 60 * 60 * 24);
+
   // Exponential decay with 30-day half-life
   return Math.exp(-daysSinceUsed / 30);
 }
@@ -33,22 +34,24 @@ function calculateCompositeScore(memory: MemorySearchResult): number {
   const similarity = memory.similarity || 0;
   const strength = memory.strength || 0.5;
   const recencyScore = calculateRecencyScore(memory.last_used);
-  
+
   // Get label multiplier
-  const labelMultiplier = memory.label ? 
-    (LABEL_MULTIPLIERS[memory.label] || 1.0) : 1.0;
-  
+  const labelMultiplier = memory.label
+    ? LABEL_MULTIPLIERS[memory.label] || 1.0
+    : 1.0;
+
   // Base composite score
-  let score = (similarity * 0.4) +
-              (strength * 0.3) +
-              (recencyScore * 0.2) +
-              (labelMultiplier * 0.1);
-  
+  let score =
+    similarity * 0.4 +
+    strength * 0.3 +
+    recencyScore * 0.2 +
+    labelMultiplier * 0.1;
+
   // Apply pinned bonus
   if (memory.pinned) {
     score += 1.0;
   }
-  
+
   return score;
 }
 
@@ -58,28 +61,26 @@ async function enrichMemoriesWithMetadata(
   memories: MemorySearchResult[]
 ): Promise<MemorySearchResult[]> {
   if (memories.length === 0) return memories;
-  
+
   // Get IDs of all memories
-  const memoryIds = memories.map(m => m.id);
-  
+  const memoryIds = memories.map((m) => m.id);
+
   // Fetch metadata for all memories
   const { data: metadataResults, error } = await supabase
     .from("memories")
     .select("id, title, summary, label, strength, last_used, pinned")
     .in("id", memoryIds);
-    
+
   if (error) {
     console.error("Error fetching memory metadata:", error);
     return memories; // Return original memories if metadata fetch fails
   }
-  
+
   // Create a map for quick lookup
-  const metadataMap = new Map(
-    metadataResults?.map(m => [m.id, m]) || []
-  );
-  
+  const metadataMap = new Map(metadataResults?.map((m) => [m.id, m]) || []);
+
   // Merge metadata into memories
-  return memories.map(memory => {
+  return memories.map((memory) => {
     const metadata = metadataMap.get(memory.id);
     if (metadata) {
       return {
@@ -142,7 +143,7 @@ export async function searchMemories(
   try {
     const supabase = await createClient();
     const offset = (page - 1) * limit;
-    
+
     // Fetch 3x the requested limit to allow for better ranking
     const fetchMultiplier = 3;
     const expandedLimit = limit * fetchMultiplier;
@@ -161,7 +162,9 @@ export async function searchMemories(
       // Then get paginated results with all metadata fields
       const { data, error } = await supabase
         .from("memories")
-        .select("id, content, compressed_conversation, context, title, summary, created_at, label, strength, last_used, pinned")
+        .select(
+          "id, content, compressed_conversation, context, title, summary, created_at, label, strength, last_used, pinned"
+        )
         .gte("created_at", startDate?.toISOString() || "1970-01-01")
         .lte("created_at", endDate?.toISOString() || new Date().toISOString())
         .order("created_at", { ascending: false })
@@ -177,10 +180,13 @@ export async function searchMemories(
         ...memory,
         similarity: 1.0,
       })) as MemorySearchResult[];
-      
+
       // Apply enhanced ranking
       memories = memories
-        .map(memory => ({ ...memory, compositeScore: calculateCompositeScore(memory) }))
+        .map((memory) => ({
+          ...memory,
+          compositeScore: calculateCompositeScore(memory),
+        }))
         .sort((a, b) => b.compositeScore - a.compositeScore)
         .slice(offset, offset + limit);
 
@@ -190,7 +196,7 @@ export async function searchMemories(
         page,
         pageSize: limit,
         totalPages: Math.ceil(totalCount / limit),
-        hasMore: offset + limit < totalCount
+        hasMore: offset + limit < totalCount,
       };
     }
 
@@ -234,42 +240,48 @@ export async function searchMemories(
         }
 
         let allMemories = fallbackData as MemorySearchResult[];
-        
+
         // Enrich with metadata and apply enhanced ranking
         allMemories = await enrichMemoriesWithMetadata(supabase, allMemories);
         allMemories = allMemories
-          .map(memory => ({ ...memory, compositeScore: calculateCompositeScore(memory) }))
+          .map((memory) => ({
+            ...memory,
+            compositeScore: calculateCompositeScore(memory),
+          }))
           .sort((a, b) => b.compositeScore - a.compositeScore);
-          
+
         const paginatedMemories = allMemories.slice(offset, offset + limit);
-        
+
         return {
           memories: paginatedMemories,
           totalCount: allMemories.length,
           page,
           pageSize: limit,
           totalPages: Math.ceil(allMemories.length / limit),
-          hasMore: offset + limit < allMemories.length
+          hasMore: offset + limit < allMemories.length,
         };
       }
 
       let allMemories = data as MemorySearchResult[];
-      
+
       // Enrich with metadata and apply enhanced ranking
       allMemories = await enrichMemoriesWithMetadata(supabase, allMemories);
       allMemories = allMemories
-        .map(memory => ({ ...memory, compositeScore: calculateCompositeScore(memory) }))
+        .map((memory) => ({
+          ...memory,
+          compositeScore: calculateCompositeScore(memory),
+        }))
         .sort((a, b) => b.compositeScore - a.compositeScore);
-        
+
       const paginatedMemories = allMemories.slice(offset, offset + limit);
-      
+
       return {
         memories: paginatedMemories,
         totalCount: allMemories.length,
         page,
         pageSize: limit,
         totalPages: Math.ceil(allMemories.length / limit),
-        hasMore: offset + limit < allMemories.length
+        hasMore: offset + limit < allMemories.length,
       };
     } else {
       // Use regular search without date filtering
@@ -285,22 +297,25 @@ export async function searchMemories(
       }
 
       let allMemories = data as MemorySearchResult[];
-      
+
       // Enrich with metadata and apply enhanced ranking
       allMemories = await enrichMemoriesWithMetadata(supabase, allMemories);
       allMemories = allMemories
-        .map(memory => ({ ...memory, compositeScore: calculateCompositeScore(memory) }))
+        .map((memory) => ({
+          ...memory,
+          compositeScore: calculateCompositeScore(memory),
+        }))
         .sort((a, b) => b.compositeScore - a.compositeScore);
-        
+
       const paginatedMemories = allMemories.slice(offset, offset + limit);
-      
+
       return {
         memories: paginatedMemories,
         totalCount: allMemories.length,
         page,
         pageSize: limit,
         totalPages: Math.ceil(allMemories.length / limit),
-        hasMore: offset + limit < allMemories.length
+        hasMore: offset + limit < allMemories.length,
       };
     }
   } catch (error) {

@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { MessageSquare } from "lucide-react";
+import { MessageSquare, Clock } from "lucide-react";
 import Link from "next/link";
 import { logout } from "../../../app/login/actions";
 import { createClient } from "../../../utils/supabase/server";
@@ -27,6 +27,16 @@ export default async function PrivatePage() {
             >
               <MessageSquare className="mr-2 h-4 w-4" />
               Private Chat
+            </Button>
+          </Link>
+
+          <Link href="/private/cron">
+            <Button
+              className="w-full flex items-center justify-center"
+              variant="outline"
+            >
+              <Clock className="mr-2 h-4 w-4" />
+              Cron Dashboard
             </Button>
           </Link>
 

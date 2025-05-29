@@ -325,6 +325,48 @@ export type Database = {
         }
         Relationships: []
       }
+      semantic_memories: {
+        Row: {
+          auth_id: string
+          confidence: number | null
+          content: string
+          created_at: string | null
+          embedding: string | null
+          id: string
+          last_updated: string | null
+          provenance: Json
+          related_memories: string[] | null
+          strength: number | null
+          type: string
+        }
+        Insert: {
+          auth_id: string
+          confidence?: number | null
+          content: string
+          created_at?: string | null
+          embedding?: string | null
+          id?: string
+          last_updated?: string | null
+          provenance?: Json
+          related_memories?: string[] | null
+          strength?: number | null
+          type: string
+        }
+        Update: {
+          auth_id?: string
+          confidence?: number | null
+          content?: string
+          created_at?: string | null
+          embedding?: string | null
+          id?: string
+          last_updated?: string | null
+          provenance?: Json
+          related_memories?: string[] | null
+          strength?: number | null
+          type?: string
+        }
+        Relationships: []
+      }
       tasks: {
         Row: {
           complexity: number
@@ -405,6 +447,10 @@ export type Database = {
         Returns: unknown
       }
       create_contacts_table: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
+      decay_semantic_memories: {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }
@@ -512,6 +558,25 @@ export type Database = {
           similarity: number
         }[]
       }
+      search_semantic_memories: {
+        Args: {
+          query_embedding: string
+          match_threshold: number
+          match_count: number
+          filter_type?: string
+        }
+        Returns: {
+          id: string
+          type: string
+          content: string
+          confidence: number
+          strength: number
+          provenance: Json
+          related_memories: string[]
+          created_at: string
+          similarity: number
+        }[]
+      }
       sparsevec_out: {
         Args: { "": unknown }
         Returns: unknown
@@ -523,6 +588,18 @@ export type Database = {
       sparsevec_typmod_in: {
         Args: { "": unknown[] }
         Returns: number
+      }
+      upsert_semantic_memory: {
+        Args: {
+          p_auth_id: string
+          p_type: string
+          p_content: string
+          p_embedding: string
+          p_confidence: number
+          p_provenance: Json
+          p_similarity_threshold?: number
+        }
+        Returns: string
       }
       vector_avg: {
         Args: { "": number[] }
