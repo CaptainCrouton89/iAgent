@@ -1,9 +1,12 @@
+import {
+  decaySemanticMemories,
+  extractSemanticMemories,
+} from "@/actions/semantic-memory";
 import { createClient } from "@/utils/supabase/server";
 import { createAdminClient } from "@/utils/supabase/service";
-import { NextResponse } from "next/server";
-import { extractSemanticMemories, decaySemanticMemories } from "@/actions/semantic-memory";
 import { openai } from "@ai-sdk/openai";
 import { generateObject } from "ai";
+import { NextResponse } from "next/server";
 import { z } from "zod";
 
 // Zod schema for optimizing interaction lessons
@@ -36,14 +39,16 @@ The output 'themes' should identify recurring patterns or categories across the 
 // Direct implementations of cron job logic
 async function executeMemoryRefresh() {
   const supabase = createAdminClient();
-  
+
   // Get all assistant_settings records
   const { data: allSettings, error: fetchError } = await supabase
     .from("assistant_settings")
     .select("id, auth_id, interaction_lessons");
 
   if (fetchError) {
-    throw new Error(`Failed to fetch assistant settings: ${fetchError.message}`);
+    throw new Error(
+      `Failed to fetch assistant settings: ${fetchError.message}`
+    );
   }
 
   const results = {
@@ -78,7 +83,7 @@ async function executeMemoryRefresh() {
 
         // Use generateObject to optimize the lessons
         const { object: optimizedData } = await generateObject({
-          model: openai("gpt-4o-mini"),
+          model: openai("gpt-4.1-mini"),
           schema: optimizedLessonsSchema,
           prompt: `Analyze and optimize the following interaction lessons:\n${lessons
             .map((lesson) => `- ${lesson}`)
@@ -116,11 +121,10 @@ async function executeMemoryRefresh() {
 
 async function executeMemoryDecay() {
   const supabase = await createClient();
-  
+
   // Delete old memories
-  const { error } = await supabase
-    .rpc('delete_old_memories');
-    
+  const { error } = await supabase.rpc("delete_old_memories");
+
   if (error) {
     throw new Error(`Failed to delete old memories: ${error.message}`);
   }
@@ -130,30 +134,33 @@ async function executeMemoryDecay() {
 
   return {
     success: true,
-    message: "Memory decay completed successfully"
+    message: "Memory decay completed successfully",
   };
 }
 
 async function executeSemanticExtraction() {
   const supabase = await createClient();
-  
+
   // First, decay old semantic memories
   await decaySemanticMemories();
-  
+
   // Get all users who have memories
   const { data: users, error: usersError } = await supabase
     .from("memories")
     .select("auth_id")
-    .gte("created_at", new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()) // Last 7 days
+    .gte(
+      "created_at",
+      new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+    ) // Last 7 days
     .order("created_at", { ascending: false });
 
   if (usersError) {
     throw new Error(`Failed to fetch users: ${usersError.message}`);
   }
 
-  const uniqueUserIds = [...new Set(users?.map(u => u.auth_id) || [])];
+  const uniqueUserIds = [...new Set(users?.map((u) => u.auth_id) || [])];
   const results = [];
-  
+
   for (const userId of uniqueUserIds) {
     try {
       // Get recent episodic memories for this user
@@ -161,31 +168,33 @@ async function executeSemanticExtraction() {
         .from("memories")
         .select("id, created_at")
         .eq("auth_id", userId)
-        .gte("created_at", new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()) // Last 24 hours
+        .gte(
+          "created_at",
+          new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+        ) // Last 24 hours
         .order("created_at", { ascending: false })
         .limit(20);
-        
+
       if (memoriesError || !recentMemories?.length) {
         continue;
       }
-      
+
       // Extract semantic memories from the recent episodic memories
       const extractedMemories = await extractSemanticMemories(
-        recentMemories.map(m => m.id),
+        recentMemories.map((m) => m.id),
         userId
       );
-      
+
       results.push({
         userId,
         processedCount: recentMemories.length,
         extractedCount: extractedMemories.length,
       });
-      
     } catch (error) {
       console.error(`Error processing user ${userId}:`, error);
     }
   }
-  
+
   return {
     success: true,
     message: "Semantic memory extraction completed",
@@ -198,33 +207,46 @@ export async function POST(request: Request) {
   try {
     // Check authentication
     const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const { path } = await request.json();
-    
+
     if (!path) {
       return NextResponse.json({ error: "Path is required" }, { status: 400 });
     }
 
     // Map of allowed cron job paths to their handlers
-    const cronHandlers: Record<string, () => Promise<any>> = {
+    const cronHandlers: Record<
+      string,
+      () => Promise<{
+        success: boolean;
+        message: string;
+        results?: unknown;
+        timestamp?: string;
+      }>
+    > = {
       "/api/cron/ai/memory": executeMemoryRefresh,
       "/api/cron/ai/memory/decay": executeMemoryDecay,
       "/api/cron/ai/semantic-extraction": executeSemanticExtraction,
     };
 
     if (!cronHandlers[path]) {
-      return NextResponse.json({ error: "Invalid cron job path" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Invalid cron job path" },
+        { status: 400 }
+      );
     }
 
     try {
       // Execute the cron job
       const result = await cronHandlers[path]();
-      
+
       return NextResponse.json({
         success: true,
         message: `Successfully triggered ${path}`,
@@ -233,9 +255,9 @@ export async function POST(request: Request) {
     } catch (error) {
       console.error("Error executing cron job:", error);
       return NextResponse.json(
-        { 
+        {
           error: error instanceof Error ? error.message : "Cron job failed",
-          details: error instanceof Error ? error.stack : undefined
+          details: error instanceof Error ? error.stack : undefined,
         },
         { status: 500 }
       );

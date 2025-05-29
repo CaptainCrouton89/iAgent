@@ -3,8 +3,8 @@
 import { createClient } from "@/utils/supabase/server";
 import { openai } from "@ai-sdk/openai";
 import { generateObject } from "ai";
-import { z } from "zod";
 import OpenAI from "openai";
+import { z } from "zod";
 
 // Initialize OpenAI client for embeddings (same as episodic memories)
 const openaiEmbeddings = new OpenAI({
@@ -44,7 +44,10 @@ export async function extractSemanticMemories(
     .map((memory) => {
       const conversation = Array.isArray(memory.compressed_conversation)
         ? memory.compressed_conversation
-            .map((msg: { role: string; content: string }) => `${msg.role}: ${msg.content}`)
+            .map(
+              (msg: { role: string; content: string }) =>
+                `${msg.role}: ${msg.content}`
+            )
             .join("\n")
         : "";
       return `Memory ${memory.id} (${memory.created_at}):\nTitle: ${
@@ -55,7 +58,7 @@ export async function extractSemanticMemories(
 
   // Extract semantic memories using LLM
   const { object } = await generateObject({
-    model: openai("gpt-4o-mini"),
+    model: openai("gpt-4.1-mini"),
     system: `You are analyzing episodic memories to extract semantic knowledge.
     
 Extract facts, themes, and summaries that represent:
