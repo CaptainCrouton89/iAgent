@@ -23,15 +23,13 @@ export function MessageBubble({ message }: MessageBubbleProps) {
         }
 
         if (part.type === "tool-invocation") {
-          return (
-            <ToolResponse key={i} toolInvocation={part.toolInvocation} />
-          );
+          return <ToolResponse key={i} toolInvocation={part.toolInvocation} />;
         }
 
         return null;
       });
     }
-    
+
     // Fallback to content if no parts
     if (message.content) {
       return (
@@ -40,7 +38,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
         </div>
       );
     }
-    
+
     return null;
   };
 

@@ -32,6 +32,13 @@ export default function MemoryChatPage() {
     thought: string;
     forMessageId: string;
   } | null>(null);
+  const [conversationMetaHistory, setConversationMetaHistory] = useState<
+    {
+      emotion: string;
+      thinkingDepth: number;
+      memorySearchRequired: boolean;
+    }[]
+  >([]);
 
   useEffect(() => {
     const fetchLessons = async () => {
@@ -77,25 +84,40 @@ export default function MemoryChatPage() {
     // Update the local messages state immediately to show the edit
     setMessages(messagesForReload);
 
-    // Fetch current emotion state
-    let newEmotion = "Neutral";
+    // Fetch conversation meta info
+    let conversationMeta = {
+      emotion: "Neutral",
+      thinkingDepth: 1,
+      memorySearchRequired: false,
+    };
     try {
-      const emotionResponse = await fetch("/api/ai/emotion", {
+      const metaResponse = await fetch("/api/ai/conversation-meta-info", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           messages: messagesForReload,
           emotionHistory: emotionHistory.slice(0, messageIndex),
-        }), // Use the updated messages for emotion detection
+        }),
       });
 
-      if (emotionResponse.ok) {
-        const data = await emotionResponse.json();
-        newEmotion = data.emotion || "Neutral";
-        setEmotionHistory([...emotionHistory, newEmotion]);
+      if (metaResponse.ok) {
+        const data = await metaResponse.json();
+        conversationMeta = {
+          emotion: data.emotion || "Neutral",
+          thinkingDepth: data.thinkingDepth || 1,
+          memorySearchRequired: data.memorySearchRequired || false,
+        };
+        setEmotionHistory([
+          ...emotionHistory.slice(0, messageIndex),
+          conversationMeta.emotion,
+        ]);
+        setConversationMetaHistory([
+          ...conversationMetaHistory.slice(0, messageIndex),
+          conversationMeta,
+        ]);
       }
     } catch (error) {
-      console.error("Error fetching emotion:", error);
+      console.error("Error fetching conversation meta info:", error);
     }
 
     // Trigger a new AI response using useChat's reload function.
@@ -103,7 +125,9 @@ export default function MemoryChatPage() {
     try {
       await reload({
         body: {
-          currentEmotion: newEmotion,
+          currentEmotion: conversationMeta.emotion,
+          thinkingDepth: conversationMeta.thinkingDepth,
+          memorySearchRequired: conversationMeta.memorySearchRequired,
           interactionLessons,
         },
       });
@@ -122,7 +146,10 @@ export default function MemoryChatPage() {
       let consciousThought = null;
       if (pendingConsciousThought?.thought) {
         consciousThought = pendingConsciousThought.thought;
-        console.log("Found pending conscious thought to send:", consciousThought);
+        console.log(
+          "Found pending conscious thought to send:",
+          consciousThought
+        );
         // Clear the pending thought after using it
         setPendingConsciousThought(null);
       }
@@ -136,29 +163,41 @@ export default function MemoryChatPage() {
       setInput("");
       const allMessages = [...messages, newMessage];
 
-      // Fetch emotion based on messages *after* adding the new one
-      let newEmotion = "Neutral";
+      // Fetch conversation meta info based on messages *after* adding the new one
+      let conversationMeta = {
+        emotion: "Neutral",
+        thinkingDepth: 1,
+        memorySearchRequired: false,
+      };
       try {
-        const emotionResponse = await fetch("/api/ai/emotion", {
+        const metaResponse = await fetch("/api/ai/conversation-meta-info", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             messages: allMessages,
             emotionHistory,
-          }), // Current messages
+          }),
         });
-        if (emotionResponse.ok) {
-          const emotionData = await emotionResponse.json();
-          newEmotion = emotionData.emotion || "Neutral";
-          setEmotionHistory([...emotionHistory, newEmotion]);
+        if (metaResponse.ok) {
+          const metaData = await metaResponse.json();
+          conversationMeta = {
+            emotion: metaData.emotion || "Neutral",
+            thinkingDepth: metaData.thinkingDepth || 1,
+            memorySearchRequired: metaData.memorySearchRequired || false,
+          };
+          setEmotionHistory([...emotionHistory, conversationMeta.emotion]);
+          setConversationMetaHistory([
+            ...conversationMetaHistory,
+            conversationMeta,
+          ]);
         } else {
           console.error(
-            "Failed to fetch emotion:",
-            await emotionResponse.text()
+            "Failed to fetch conversation meta info:",
+            await metaResponse.text()
           );
         }
       } catch (error) {
-        console.error("Error fetching emotion:", error);
+        console.error("Error fetching conversation meta info:", error);
       }
 
       // Non-blocking call to conscious thought endpoint with the new message included
@@ -174,25 +213,34 @@ export default function MemoryChatPage() {
           if (consciousThoughtResponse.ok) {
             const consciousThoughtData = await consciousThoughtResponse.json();
             console.log("Conscious thought response:", consciousThoughtData);
-            
+
             // Format and store the conscious thought
             const thoughts: string[] = [];
             if (consciousThoughtData.logicalThought) {
-              thoughts.push(`Logical: ${consciousThoughtData.logicalThought.join(' → ')}`);
+              thoughts.push(
+                `Logical: ${consciousThoughtData.logicalThought.join(" → ")}`
+              );
             }
             if (consciousThoughtData.creativeThought) {
-              thoughts.push(`Creative: ${consciousThoughtData.creativeThought.join(' → ')}`);
+              thoughts.push(
+                `Creative: ${consciousThoughtData.creativeThought.join(" → ")}`
+              );
             }
-            
+
             if (thoughts.length > 0) {
               // Find the last assistant message ID
-              const lastAssistantMessage = [...messages].reverse().find(m => m.role === 'assistant');
+              const lastAssistantMessage = [...messages]
+                .reverse()
+                .find((m) => m.role === "assistant");
               if (lastAssistantMessage) {
-                const thoughtContent = thoughts.join('\n');
-                console.log("Setting pending conscious thought:", thoughtContent);
+                const thoughtContent = thoughts.join("\n");
+                console.log(
+                  "Setting pending conscious thought:",
+                  thoughtContent
+                );
                 setPendingConsciousThought({
                   thought: thoughtContent,
-                  forMessageId: lastAssistantMessage.id
+                  forMessageId: lastAssistantMessage.id,
                 });
               }
             }
@@ -210,7 +258,9 @@ export default function MemoryChatPage() {
       // Append the new message and trigger the main chat API call
       await append(newMessage, {
         body: {
-          currentEmotion: newEmotion,
+          currentEmotion: conversationMeta.emotion,
+          thinkingDepth: conversationMeta.thinkingDepth,
+          memorySearchRequired: conversationMeta.memorySearchRequired,
           interactionLessons,
           consciousThought,
         },
@@ -224,6 +274,8 @@ export default function MemoryChatPage() {
       setInput,
       emotionHistory,
       setEmotionHistory,
+      conversationMetaHistory,
+      setConversationMetaHistory,
       pendingConsciousThought,
     ]
   );

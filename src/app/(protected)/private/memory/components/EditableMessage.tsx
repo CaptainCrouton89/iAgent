@@ -1,6 +1,6 @@
 import { Message } from "@/types/chat";
-import { KeyboardEvent, useEffect, useRef, useState } from "react";
 import Markdown from "markdown-to-jsx";
+import { KeyboardEvent, useEffect, useRef, useState } from "react";
 import { ToolResponse } from "./ToolResponse";
 
 interface EditableMessageProps {

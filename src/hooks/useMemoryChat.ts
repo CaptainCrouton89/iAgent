@@ -42,126 +42,182 @@ export function useMemoryChat({ api }: UseChatOptions) {
     []
   );
 
-  const updateAssistantMessage = useCallback((newState: Partial<MessageState>) => {
-    messageStateRef.current = { ...messageStateRef.current, ...newState };
-    
-    setMessages(prev => {
-      const newMessages = [...prev];
-      const currentId = messageStateRef.current.currentAssistantId;
-      
-      // Find existing assistant message or create new one
-      let assistantMessage = newMessages.find(m => m.id === currentId && m.role === "assistant");
-      
-      if (!assistantMessage) {
-        assistantMessage = {
-          id: currentId,
-          role: "assistant",
-          content: "",
-          parts: [],
-          createdAt: new Date(),
-        };
-        newMessages.push(assistantMessage);
-      }
+  const updateAssistantMessage = useCallback(
+    (newState: Partial<MessageState>) => {
+      messageStateRef.current = { ...messageStateRef.current, ...newState };
 
-      // Update message content and parts
-      assistantMessage.content = messageStateRef.current.currentTextContent;
-      
-      // Rebuild parts from current state
-      const parts: Message["parts"] = [];
-      
-      // Add text part if there's content
-      if (messageStateRef.current.currentTextContent) {
-        parts.push({
-          type: "text",
-          text: messageStateRef.current.currentTextContent,
+      setMessages((prev) => {
+        const newMessages = [...prev];
+        const currentId = messageStateRef.current.currentAssistantId;
+        
+        // Skip update if no current assistant ID
+        if (!currentId) return prev;
+
+        // Find existing assistant message or create new one
+        let assistantMessage = newMessages.find(
+          (m) => m.id === currentId && m.role === "assistant"
+        );
+
+        if (!assistantMessage) {
+          // Only create new message if we have content or tool calls
+          if (!messageStateRef.current.currentTextContent && 
+              messageStateRef.current.activeToolCalls.size === 0) {
+            return prev;
+          }
+          
+          assistantMessage = {
+            id: currentId,
+            role: "assistant",
+            content: "",
+            parts: [],
+            createdAt: new Date(),
+          };
+          newMessages.push(assistantMessage);
+        }
+
+        // Update message content and parts
+        assistantMessage.content = messageStateRef.current.currentTextContent;
+
+        // Rebuild parts from current state
+        const parts: Message["parts"] = [];
+
+        // Add text part if there's content
+        if (messageStateRef.current.currentTextContent) {
+          parts.push({
+            type: "text",
+            text: messageStateRef.current.currentTextContent,
+          });
+        }
+
+        // Add tool invocation parts
+        messageStateRef.current.activeToolCalls.forEach((toolInvocation) => {
+          parts.push({
+            type: "tool-invocation",
+            toolInvocation,
+          });
         });
-      }
-      
-      // Add tool invocation parts
-      messageStateRef.current.activeToolCalls.forEach(toolInvocation => {
-        parts.push({
-          type: "tool-invocation",
-          toolInvocation,
-        });
+
+        assistantMessage.parts = parts;
+        return newMessages;
       });
-      
-      assistantMessage.parts = parts;
-      return newMessages;
-    });
-  }, []);
+    },
+    []
+  );
 
-  const handleTextDelta = useCallback((textDelta: string) => {
-    messageStateRef.current.currentTextContent += textDelta;
-    updateAssistantMessage({});
-  }, [updateAssistantMessage]);
-
-  const handleToolCallStart = useCallback((toolCallId: string, toolName: string) => {
-    const toolInvocation: ToolInvocation = {
-      toolCallId,
-      toolName,
-      state: "partial-call",
-      args: {},
-    };
-    
-    messageStateRef.current.activeToolCalls.set(toolCallId, toolInvocation);
-    updateAssistantMessage({});
-  }, [updateAssistantMessage]);
-
-  const handleToolCallDelta = useCallback((toolCallId: string, argsTextDelta: string) => {
-    const toolCall = messageStateRef.current.activeToolCalls.get(toolCallId);
-    if (!toolCall) return;
-
-    // Build up args string (we store it temporarily in a special property)
-    const toolCallWithArgs = toolCall as ToolInvocation & { _argsString?: string };
-    const currentArgsString = toolCallWithArgs._argsString || "";
-    const newArgsString = currentArgsString + argsTextDelta;
-    toolCallWithArgs._argsString = newArgsString;
-
-    // Try to parse complete JSON
-    try {
-      const parsedArgs = JSON.parse(newArgsString);
-      toolCall.args = parsedArgs;
-      toolCall.state = "call";
+  const handleTextDelta = useCallback(
+    (textDelta: string) => {
+      messageStateRef.current.currentTextContent += textDelta;
       updateAssistantMessage({});
-    } catch {
-      // Not complete JSON yet, keep accumulating
-    }
-  }, [updateAssistantMessage]);
+    },
+    [updateAssistantMessage]
+  );
 
-  const handleToolCallComplete = useCallback((toolCallId: string, args: unknown) => {
-    const toolCall = messageStateRef.current.activeToolCalls.get(toolCallId);
-    if (!toolCall) return;
+  const handleToolCallStart = useCallback(
+    (toolCallId: string, toolName: string) => {
+      const toolInvocation: ToolInvocation = {
+        toolCallId,
+        toolName,
+        state: "partial-call",
+        args: {},
+      };
 
-    toolCall.args = args;
-    toolCall.state = "call";
-    // Clean up temporary args string
-    const toolCallWithArgs = toolCall as ToolInvocation & { _argsString?: string };
-    delete toolCallWithArgs._argsString;
-    updateAssistantMessage({});
-  }, [updateAssistantMessage]);
+      messageStateRef.current.activeToolCalls.set(toolCallId, toolInvocation);
+      updateAssistantMessage({});
+    },
+    [updateAssistantMessage]
+  );
 
-  const handleToolResult = useCallback((toolCallId: string, result: unknown) => {
-    const toolCall = messageStateRef.current.activeToolCalls.get(toolCallId);
-    if (!toolCall) return;
+  const handleToolCallDelta = useCallback(
+    (toolCallId: string, argsTextDelta: string) => {
+      const toolCall = messageStateRef.current.activeToolCalls.get(toolCallId);
+      if (!toolCall) return;
 
-    toolCall.result = result;
-    toolCall.state = "result";
-    updateAssistantMessage({});
-  }, [updateAssistantMessage]);
+      // Build up args string (we store it temporarily in a special property)
+      const toolCallWithArgs = toolCall as ToolInvocation & {
+        _argsString?: string;
+      };
+      const currentArgsString = toolCallWithArgs._argsString || "";
+      const newArgsString = currentArgsString + argsTextDelta;
+      toolCallWithArgs._argsString = newArgsString;
+
+      // Try to parse complete JSON
+      try {
+        const parsedArgs = JSON.parse(newArgsString);
+        toolCall.args = parsedArgs;
+        toolCall.state = "call";
+        updateAssistantMessage({});
+      } catch {
+        // Not complete JSON yet, keep accumulating
+      }
+    },
+    [updateAssistantMessage]
+  );
+
+  const handleToolCallComplete = useCallback(
+    (toolCallId: string, args: unknown) => {
+      const toolCall = messageStateRef.current.activeToolCalls.get(toolCallId);
+      if (!toolCall) return;
+
+      toolCall.args = args;
+      toolCall.state = "call";
+      // Clean up temporary args string
+      const toolCallWithArgs = toolCall as ToolInvocation & {
+        _argsString?: string;
+      };
+      delete toolCallWithArgs._argsString;
+      updateAssistantMessage({});
+    },
+    [updateAssistantMessage]
+  );
+
+  const handleToolResult = useCallback(
+    (toolCallId: string, result: unknown) => {
+      const toolCall = messageStateRef.current.activeToolCalls.get(toolCallId);
+      if (!toolCall) return;
+
+      toolCall.result = result;
+      toolCall.state = "result";
+      updateAssistantMessage({});
+    },
+    [updateAssistantMessage]
+  );
 
   const handleFinish = useCallback(() => {
     // Final update to ensure all data is saved
     updateAssistantMessage({});
-    
-    // Reset state for next message
-    messageStateRef.current = {
-      messages: [],
-      currentAssistantId: "",
-      currentTextContent: "",
-      activeToolCalls: new Map(),
-    };
-    
-    setStatus("ready");
+
+    // Clean up empty messages before resetting state
+    setMessages(prev => {
+      return prev.filter(msg => {
+        // Keep all non-assistant messages
+        if (msg.role !== "assistant") return true;
+        
+        // Keep assistant messages that have content or tool invocations
+        if (msg.content && msg.content.trim() !== "") return true;
+        if (msg.parts && msg.parts.length > 0) {
+          // Check if any part has actual content
+          return msg.parts.some(part => {
+            if (part.type === "text" && part.text.trim() !== "") return true;
+            if (part.type === "tool-invocation") return true;
+            return false;
+          });
+        }
+        
+        // Remove empty assistant messages
+        return false;
+      });
+    });
+
+    // Reset state for next message, but defer it slightly to ensure final render completes
+    setTimeout(() => {
+      messageStateRef.current = {
+        messages: [],
+        currentAssistantId: "",
+        currentTextContent: "",
+        activeToolCalls: new Map(),
+      };
+      setStatus("ready");
+    }, 100);
   }, [updateAssistantMessage]);
 
   const processStreamEvent = useCallback(
@@ -214,7 +270,14 @@ export function useMemoryChat({ api }: UseChatOptions) {
           break;
       }
     },
-    [handleTextDelta, handleToolCallStart, handleToolCallDelta, handleToolCallComplete, handleToolResult, handleFinish]
+    [
+      handleTextDelta,
+      handleToolCallStart,
+      handleToolCallDelta,
+      handleToolCallComplete,
+      handleToolResult,
+      handleFinish,
+    ]
   );
 
   const append = useCallback(

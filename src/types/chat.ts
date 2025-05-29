@@ -7,7 +7,7 @@ export interface Message {
   tool_call_id?: string;
 }
 
-export type MessagePart = 
+export type MessagePart =
   | { type: "text"; text: string }
   | { type: "tool-invocation"; toolInvocation: ToolInvocation };
 
@@ -22,6 +22,8 @@ export interface ToolInvocation {
 export interface ChatRequestBody {
   messages: Message[];
   currentEmotion?: string;
+  thinkingDepth?: number;
+  memorySearchRequired?: boolean;
   interactionLessons?: string[];
   consciousThought?: string | null;
 }
@@ -29,7 +31,14 @@ export interface ChatRequestBody {
 export type ChatStatus = "ready" | "loading" | "error";
 
 export interface StreamEvent {
-  type: "text-delta" | "tool-call-streaming-start" | "tool-call-delta" | "tool-call-complete" | "tool-result" | "finish" | "error";
+  type:
+    | "text-delta"
+    | "tool-call-streaming-start"
+    | "tool-call-delta"
+    | "tool-call-complete"
+    | "tool-result"
+    | "finish"
+    | "error";
   textDelta?: string;
   toolCallId?: string;
   toolName?: string;

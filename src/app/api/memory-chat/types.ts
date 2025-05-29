@@ -4,6 +4,8 @@ import { Message } from "@/types/chat";
 export interface ChatRequestBody {
   messages: Message[];
   currentEmotion?: string;
+  thinkingDepth?: number;
+  memorySearchRequired?: boolean;
   interactionLessons?: string[];
   consciousThought?: string | null;
   reasoningContext?: {
