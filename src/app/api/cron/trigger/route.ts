@@ -120,13 +120,87 @@ async function executeMemoryRefresh() {
 }
 
 async function executeMemoryDecay() {
-  const supabase = await createClient();
+  const supabase = createAdminClient();
 
-  // Delete old memories
-  const { error } = await supabase.rpc("delete_old_memories");
+  // Base decay rates per day for each label type
+  const BASE_DECAY_RATES: Record<string, number> = {
+    important: 0.001,      // -0.1% per day (never deleted)
+    user_profile: 0.001,   // -0.1% per day
+    general: 0.003,        // -0.3% per day
+    temporary: 0.01,       // -1% per day
+    trivial: 0.02,         // -2% per day
+  };
 
-  if (error) {
-    throw new Error(`Failed to delete old memories: ${error.message}`);
+  // Get all non-pinned memories
+  const { data: memories, error: fetchError } = await supabase
+    .from("memories")
+    .select("id, label, strength, last_used")
+    .eq("pinned", false)
+    .gt("strength", 0);
+
+  if (fetchError) {
+    throw new Error(`Failed to fetch memories: ${fetchError.message}`);
+  }
+
+  const now = new Date();
+  const memoriesToDelete: string[] = [];
+  const memoriesToUpdate: Array<{ id: string; newStrength: number }> = [];
+  let processed = 0;
+  let decayed = 0;
+  let deleted = 0;
+
+  // Process each memory
+  if (memories && memories.length > 0) {
+    for (const memory of memories) {
+      processed++;
+      
+      // Calculate days since last used
+      const lastUsedDate = new Date(memory.last_used);
+      const daysSinceLastUsed = Math.max(
+        0,
+        (now.getTime() - lastUsedDate.getTime()) / (1000 * 60 * 60 * 24)
+      );
+
+      // Get decay rate for this label
+      const decayRate = BASE_DECAY_RATES[memory.label || "general"] || 
+                       BASE_DECAY_RATES.general;
+
+      // Calculate new strength
+      const decayAmount = decayRate * daysSinceLastUsed;
+      const newStrength = Math.max(0, memory.strength - decayAmount);
+
+      // Check deletion criteria
+      if (memory.label !== "important" && newStrength < 0.1) {
+        memoriesToDelete.push(memory.id);
+        deleted++;
+      } else if (newStrength < memory.strength) {
+        memoriesToUpdate.push({ id: memory.id, newStrength });
+        decayed++;
+      }
+    }
+  }
+
+  // Update memories
+  if (memoriesToUpdate.length > 0) {
+    const updatePromises = memoriesToUpdate.map(({ id, newStrength }) =>
+      supabase
+        .from("memories")
+        .update({ strength: newStrength })
+        .eq("id", id)
+    );
+    await Promise.all(updatePromises);
+  }
+
+  // Delete memories
+  if (memoriesToDelete.length > 0) {
+    const { error: deleteError } = await supabase
+      .from("memories")
+      .delete()
+      .in("id", memoriesToDelete);
+
+    if (deleteError) {
+      throw new Error(`Failed to delete memories: ${deleteError.message}`);
+    }
   }
 
   // Also decay semantic memories
@@ -135,6 +209,12 @@ async function executeMemoryDecay() {
   return {
     success: true,
     message: "Memory decay completed successfully",
+    results: {
+      total: memories?.length || 0,
+      processed,
+      decayed,
+      deleted,
+    },
   };
 }
 

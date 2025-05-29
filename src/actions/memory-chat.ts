@@ -27,16 +27,8 @@ const memoryMetadataSchema = z.object({
     .string()
     .describe("A 1-2 sentence summary of the conversation content"),
   label: z
-    .enum([
-      "important",
-      "user_profile",
-      "general",
-      "temporary",
-      "trivial",
-    ])
-    .describe(
-      "Category for the memory based on content importance and type"
-    ),
+    .enum(["important", "user_profile", "general", "temporary", "trivial"])
+    .describe("Category for the memory based on content importance and type"),
   strength: z
     .number()
     .min(0)
@@ -45,9 +37,7 @@ const memoryMetadataSchema = z.object({
   pinned: z
     .boolean()
     .describe("Whether this memory should be permanently retained"),
-  reasoning: z
-    .string()
-    .describe("Brief explanation for the metadata choices"),
+  reasoning: z.string().describe("Brief explanation for the metadata choices"),
 });
 
 // Function to generate memory metadata for a conversation
@@ -90,7 +80,9 @@ async function generateMemoryMetadata(
     const { object } = await generateObject({
       model: openai("gpt-4.1-mini"),
       schema: memoryMetadataSchema,
-      prompt: `Analyze this conversation and generate metadata:\n\n${conversationText}\n\nPrevious memories used: ${usedMemoryIds ? usedMemoryIds.length : 0}`,
+      prompt: `Analyze this conversation and generate metadata:\n\n${conversationText}\n\nPrevious memories used: ${
+        usedMemoryIds ? usedMemoryIds.length : 0
+      }`,
       system: `You are analyzing a conversation to create comprehensive memory metadata.
 
 Label Guidelines:
@@ -114,7 +106,12 @@ Auto-pin when:
     });
 
     const { reasoning, ...metadata } = object;
-    console.log("Generated memory metadata:", metadata, "Reasoning:", reasoning);
+    console.log(
+      "Generated memory metadata:",
+      metadata,
+      "Reasoning:",
+      reasoning
+    );
     return metadata;
   } catch (error) {
     console.error("Error generating title and summary:", error);

@@ -10,9 +10,40 @@ import { buildSystemPromptWithSelfConcept } from "./self-concept-builder";
 import { createMemoryChatStream } from "./stream-handler";
 import { ChatRequestBody } from "./types";
 import { processConsciousThought, createReasoningDeveloperMessage, extractMemorySearchContext } from "./reasoning-processor";
+import { Message } from "@/types/chat";
 
 // Allow streaming responses up to 30 seconds
 export const maxDuration = 30;
+
+/**
+ * Converts our custom Message format to OpenAI's ChatCompletionMessageParam format
+ */
+function convertMessagesToOpenAI(messages: Message[]): ChatCompletionMessageParam[] {
+  return messages.map((message): ChatCompletionMessageParam => {
+    // Handle tool messages
+    if (message.role === "tool") {
+      return {
+        role: "tool",
+        content: message.content || "",
+        tool_call_id: message.tool_call_id || "",
+      };
+    }
+
+    // Handle other roles (user, assistant, system, developer)
+    if (message.role === "developer") {
+      return {
+        role: "developer" as const,
+        content: message.content || "",
+      } as ChatCompletionMessageParam;
+    }
+
+    // Handle standard roles
+    return {
+      role: message.role as "user" | "assistant" | "system",
+      content: message.content || "",
+    };
+  });
+}
 
 export async function POST(req: Request) {
   try {
@@ -24,8 +55,11 @@ export async function POST(req: Request) {
       reasoningContext,
     }: ChatRequestBody = await req.json();
 
+    // Convert our custom Message format to OpenAI format for mode assessment
+    const convertedMessages = convertMessagesToOpenAI(messages);
+    
     // Assess what mode to use
-    const chatMode = await assessChatMode(messages);
+    const chatMode = await assessChatMode(convertedMessages);
     console.log("Chat mode assessed:", chatMode);
 
     // Fetch or create the user's self-concept
@@ -43,7 +77,7 @@ export async function POST(req: Request) {
 
     // Convert messages to ExtendedMessageParam type and inject enhanced conscious thought if provided
     // Note: Action mode skips conscious thought processing for efficiency
-    const processedMessages: ChatCompletionMessageParam[] = [...messages];
+    const processedMessages: ChatCompletionMessageParam[] = [...convertedMessages];
     if (consciousThought && chatMode !== 'action') {
       // Process conscious thought for structured reasoning
       const processedThought = processConsciousThought(consciousThought, reasoningContext);

@@ -1,8 +1,8 @@
-import { ChatCompletionMessageParam } from "openai/resources/chat/completions";
 import { ReasoningState, ReasoningOutput } from "@/types/reasoning";
+import { Message } from "@/types/chat";
 
 export interface ChatRequestBody {
-  messages: ChatCompletionMessageParam[];
+  messages: Message[];
   currentEmotion?: string;
   interactionLessons?: string[];
   consciousThought?: string | null;

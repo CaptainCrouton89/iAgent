@@ -89,6 +89,101 @@ export async function POST(req: Request) {
       );
     }
 
+    // After saving, boost strength of memories that were relevant to this conversation
+    let relevanceAnalysisError: string | null = null;
+    let relevantMemoriesCount = 0;
+
+    try {
+      const supabase = await createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (user) {
+        // Get recent memories to analyze for relevance
+        const { data: recentMemories, error: fetchError } = await supabase
+          .from("memories")
+          .select("id, title, summary, strength")
+          .eq("auth_id", user.id)
+          .order("created_at", { ascending: false })
+          .limit(20); // Analyze last 20 memories
+
+        if (!fetchError && recentMemories && recentMemories.length > 0) {
+          // Create conversation text for analysis
+          const conversationText = messages
+            .map((m) => `${m.role}: ${m.content}`)
+            .join("\n");
+
+          // Use AI to identify which memories are relevant to this conversation
+          const relevanceSchema = z.object({
+            relevant_memory_ids: z
+              .array(z.string())
+              .describe("IDs of memories that are relevant to the current conversation"),
+          });
+
+          const memoriesContext = recentMemories
+            .map((m) => `ID: ${m.id}\nTitle: ${m.title}\nSummary: ${m.summary}`)
+            .join("\n\n");
+
+          const { object: relevanceData } = await generateObject({
+            model: openai("gpt-4.1-nano"),
+            schema: relevanceSchema,
+            prompt: `Analyze this conversation and identify which previous memories are relevant:
+
+CONVERSATION:
+${conversationText}
+
+PREVIOUS MEMORIES:
+${memoriesContext}
+
+Return the IDs of memories that are topically relevant, share themes, or provide useful context for this conversation.`,
+            system: `You are analyzing a conversation to identify relevant previous memories. A memory is relevant if:
+- It shares similar topics or themes
+- It provides useful context for understanding the conversation
+- It contains information that relates to what was discussed
+- It shows patterns or connections to the current discussion
+
+Only return IDs of memories that have clear relevance. Be selective - not every memory needs to be relevant.`,
+            temperature: 0.1,
+          });
+
+          // Boost strength of relevant memories
+          if (relevanceData.relevant_memory_ids.length > 0) {
+            const updatePromises = relevanceData.relevant_memory_ids.map(
+              async (memoryId) => {
+                // Get current strength
+                const { data: memory } = await supabase
+                  .from("memories")
+                  .select("strength")
+                  .eq("id", memoryId)
+                  .eq("auth_id", user.id)
+                  .single();
+
+                if (memory) {
+                  // Boost strength by 0.05 (smaller than direct usage boost)
+                  const newStrength = Math.min(1.0, (memory.strength || 0.5) + 0.05);
+                  return supabase
+                    .from("memories")
+                    .update({
+                      strength: newStrength,
+                      last_used: new Date().toISOString(),
+                    })
+                    .eq("id", memoryId)
+                    .eq("auth_id", user.id);
+                }
+              }
+            );
+
+            await Promise.all(updatePromises);
+            relevantMemoriesCount = relevanceData.relevant_memory_ids.length;
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Error in relevance analysis:", error);
+      relevanceAnalysisError = error instanceof Error ? error.message : "Unknown error";
+    }
+
     let lessonExtractionError: string | null = null;
     let lessonSaved = false;
     let preliminaryCheckSkippedDetailedExtraction = false;
@@ -282,6 +377,11 @@ ${messages.map((m) => `${m.role}: ${m.content}`).join("\n")}`;
     return NextResponse.json({
       success: true,
       conversationSaveStatus: "Saved successfully.",
+      relevanceAnalysis: {
+        processed: true,
+        relevantMemoriesCount,
+        error: relevanceAnalysisError,
+      },
       lessonExtraction: {
         processed: true,
         lessonSaved,

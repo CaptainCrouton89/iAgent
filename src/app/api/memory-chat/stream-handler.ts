@@ -216,13 +216,28 @@ export async function createMemoryChatStream(
             });
 
             for await (const continuationChunk of continuationStream) {
-              const continuationDelta = continuationChunk.choices[0]?.delta;
+              const continuationChoice = continuationChunk.choices[0];
+              const continuationDelta = continuationChoice?.delta;
+              const continuationFinishReason = continuationChoice?.finish_reason;
+              
               if (continuationDelta?.content) {
                 controller.enqueue(
                   encoder.encode(
                     `data: ${JSON.stringify({
                       type: "text-delta",
                       textDelta: continuationDelta.content,
+                    })}\n\n`
+                  )
+                );
+              }
+              
+              // Send finish event when continuation stream completes
+              if (continuationFinishReason === "stop") {
+                controller.enqueue(
+                  encoder.encode(
+                    `data: ${JSON.stringify({
+                      type: "finish",
+                      finishReason: "stop",
                     })}\n\n`
                   )
                 );
