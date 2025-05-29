@@ -122,7 +122,7 @@ export async function executeMemorySearch(params: MemorySearchParameters & { hyp
     if (memoryType === "semantic") {
       // Search only semantic memories
       if (!searchQuery) {
-        return "Query is required for semantic memory search.";
+        return "To search semantic memories, please provide a query. For example: 'What do you know about me?', 'my preferences', 'my goals', or any specific topic you'd like me to recall.";
       }
       
       const semanticResults = await searchSemanticMemories(searchQuery, {

@@ -8,7 +8,69 @@ import {
 import { openai } from "@ai-sdk/openai";
 import { generateText, tool } from "ai";
 import { z } from "zod";
-import { memorySearchTool } from "./memory-search";
+import { executeMemorySearch } from "./openai/memory-search";
+
+// Adapter to use OpenAI memory search with Vercel AI SDK
+const memorySearchTool = tool({
+  description:
+    "Search for memories using different modes: 'episodic' for specific conversations/events, 'semantic' for facts/themes/summaries, or 'hybrid' for both. Supports semantic similarity search, date filtering, and pagination.",
+  parameters: z.object({
+    query: z
+      .string()
+      .optional()
+      .describe(
+        "The search query to find relevant memories (optional - leave empty to search all memories in date range)"
+      ),
+    memoryType: z
+      .enum(["episodic", "semantic", "hybrid"])
+      .describe(
+        "Memory type: 'episodic' for conversations/events, 'semantic' for facts/themes, 'hybrid' for both"
+      ),
+    threshold: z
+      .number()
+      .min(0)
+      .max(1)
+      .default(0.7)
+      .describe("Similarity threshold (.6-.9)"),
+    limit: z
+      .number()
+      .min(1)
+      .max(10)
+      .describe("Maximum number of results per page"),
+    searchMode: z
+      .enum(["deep", "shallow"])
+      .default("deep")
+      .describe(
+        "Search mode: 'deep' returns full content, 'shallow' returns only titles/summaries (episodic only)"
+      ),
+    semanticType: z
+      .enum(["fact", "theme", "summary"])
+      .optional()
+      .describe(
+        "Filter semantic memories by type (only applies when memoryType includes semantic)"
+      ),
+    page: z
+      .number()
+      .min(1)
+      .default(1)
+      .describe("Page number (1-based) for paginated results"),
+    startDate: z
+      .string()
+      .optional()
+      .describe(
+        "Start date for search range (ISO format or relative like '7 days ago')"
+      ),
+    endDate: z
+      .string()
+      .optional()
+      .describe(
+        "End date for search range (ISO format or relative like 'today')"
+      ),
+  }),
+  execute: async (params) => {
+    return await executeMemorySearch(params);
+  },
+});
 
 const ENHANCED_LOGICAL_PROMPT = (
   currentState: ReasoningState
