@@ -49,7 +49,7 @@ export function useMemoryChat({ api }: UseChatOptions) {
       setMessages((prev) => {
         const newMessages = [...prev];
         const currentId = messageStateRef.current.currentAssistantId;
-        
+
         // Skip update if no current assistant ID
         if (!currentId) return prev;
 
@@ -60,11 +60,13 @@ export function useMemoryChat({ api }: UseChatOptions) {
 
         if (!assistantMessage) {
           // Only create new message if we have content or tool calls
-          if (!messageStateRef.current.currentTextContent && 
-              messageStateRef.current.activeToolCalls.size === 0) {
+          if (
+            !messageStateRef.current.currentTextContent &&
+            messageStateRef.current.activeToolCalls.size === 0
+          ) {
             return prev;
           }
-          
+
           assistantMessage = {
             id: currentId,
             role: "assistant",
@@ -187,22 +189,22 @@ export function useMemoryChat({ api }: UseChatOptions) {
     updateAssistantMessage({});
 
     // Clean up empty messages before resetting state
-    setMessages(prev => {
-      return prev.filter(msg => {
+    setMessages((prev) => {
+      return prev.filter((msg) => {
         // Keep all non-assistant messages
         if (msg.role !== "assistant") return true;
-        
+
         // Keep assistant messages that have content or tool invocations
         if (msg.content && msg.content.trim() !== "") return true;
         if (msg.parts && msg.parts.length > 0) {
           // Check if any part has actual content
-          return msg.parts.some(part => {
+          return msg.parts.some((part) => {
             if (part.type === "text" && part.text.trim() !== "") return true;
             if (part.type === "tool-invocation") return true;
             return false;
           });
         }
-        
+
         // Remove empty assistant messages
         return false;
       });
